@@ -8,7 +8,16 @@ final class TextInjector {
     private(set) var lastInserted: String?
 
     func insert(_ rawText: String) {
-        let text = Settings.shared.smartSpacing ? joinWithContext(rawText) : rawText
+        paste(Settings.shared.smartSpacing ? joinWithContext(rawText) : rawText)
+    }
+
+    /// Pastes exactly as given — used for AI output, which either replaces a
+    /// live selection or is already fully formed.
+    func insertRaw(_ text: String) {
+        paste(text)
+    }
+
+    private func paste(_ text: String) {
         lastInsertionAt = Date()
         lastInserted = text
         let pb = NSPasteboard.general

@@ -50,7 +50,7 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(allGranted
-                     ? "All set — hold \(Settings.shared.hotkey.displayName) and speak. Try it here:"
+                     ? "All set — hold \(Settings.shared.dictateKeyDisplay) and speak. Try it here:"
                      : "Grant the permissions above, then try it here:")
                     .font(.callout)
                     .foregroundStyle(allGranted ? .primary : .secondary)

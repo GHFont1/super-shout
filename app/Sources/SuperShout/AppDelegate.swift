@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// "Press 🌐 key to" system setting. 0 = Do Nothing; anything else fires a
     /// macOS action on an fn tap and fights our quick-tap hands-free toggle.
     private var fnKeyConflict: Bool {
-        guard Settings.shared.hotkey == .fn else { return false }
+        guard Settings.shared.action(for: .fn) != .off else { return false }
         let usage = CFPreferencesCopyAppValue("AppleFnUsageType" as CFString, "com.apple.HIToolbox" as CFString) as? Int
         return (usage ?? 1) != 0
     }
@@ -85,10 +85,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func rebuildMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        let hk = Settings.shared.hotkey.displayName
-        let header = NSMenuItem(title: "Super Shout — hold \(hk) to talk", action: nil, keyEquivalent: "")
-        header.isEnabled = false
-        menu.addItem(header)
+        for key in HoldKey.allCases {
+            let action = Settings.shared.action(for: key)
+            guard action != .off else { continue }
+            let line = NSMenuItem(title: "Hold \(key.displayName) — \(action.displayName)", action: nil, keyEquivalent: "")
+            line.isEnabled = false
+            menu.addItem(line)
+        }
 
         let words = Settings.shared.totalWordsDictated
         if words > 0 {

@@ -1,5 +1,21 @@
 import Foundation
 
+/// What holding a given key does.
+enum KeyAction: String, CaseIterable, Codable {
+    case dictate, aiEdit, aiCompose, off
+
+    var displayName: String {
+        switch self {
+        case .dictate: return "Dictate"
+        case .aiEdit: return "AI Edit Selection"
+        case .aiCompose: return "AI Compose"
+        case .off: return "Off"
+        }
+    }
+
+    var needsAPIKey: Bool { self == .aiEdit || self == .aiCompose }
+}
+
 enum HoldKey: String, CaseIterable, Codable {
     case fn, rightCommand, rightOption
 
@@ -27,6 +43,29 @@ final class Settings {
     var hotkey: HoldKey {
         get { HoldKey(rawValue: d.string(forKey: "hotkey") ?? "") ?? .fn }
         set { d.set(newValue.rawValue, forKey: "hotkey") }
+    }
+
+    /// Per-key mode assignment. Defaults: the legacy dictation hotkey stays
+    /// Dictate; the remaining keys get AI Edit and AI Compose.
+    func action(for key: HoldKey) -> KeyAction {
+        if let stored = (d.dictionary(forKey: "keyActions") as? [String: String])?[key.rawValue],
+           let action = KeyAction(rawValue: stored) {
+            return action
+        }
+        if key == hotkey { return .dictate }
+        let remaining = HoldKey.allCases.filter { $0 != hotkey }
+        return key == remaining.first ? .aiEdit : .aiCompose
+    }
+
+    func setAction(_ action: KeyAction, for key: HoldKey) {
+        var dict = (d.dictionary(forKey: "keyActions") as? [String: String]) ?? [:]
+        dict[key.rawValue] = action.rawValue
+        d.set(dict, forKey: "keyActions")
+    }
+
+    /// The key currently assigned to plain dictation, for UI copy.
+    var dictateKeyDisplay: String {
+        HoldKey.allCases.first { action(for: $0) == .dictate }?.displayName ?? "fn (🌐)"
     }
 
     var removeFillers: Bool {

@@ -1,25 +1,26 @@
 import AppKit
 
-/// Listens for the configured hold-key globally via a CGEvent tap.
-/// Hold = push-to-talk. Quick tap (< 0.35 s) toggles hands-free lock.
-/// While dictation is live, Esc cancels it (and is swallowed so the
-/// frontmost app never sees the keypress).
+/// Watches all three hold keys globally via a CGEvent tap; each key can carry
+/// a different action (dictate / AI edit / AI compose). Hold = push-to-talk,
+/// quick tap (< 0.35 s) toggles hands-free for that key's mode. While
+/// dictation is live, Esc cancels it (swallowed so the frontmost app never
+/// sees the keypress).
 final class HotkeyManager {
-    var onPress: (() -> Void)?
-    var onRelease: (() -> Void)?
-    var onQuickTap: (() -> Void)?
+    var onPress: ((HoldKey) -> Void)?
+    var onRelease: ((HoldKey) -> Void)?
+    var onQuickTap: ((HoldKey) -> Void)?
     var onEscape: (() -> Void)?
     var isListening: (() -> Bool)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var keyIsDown = false
-    private var pressStartedAt: Date?
-
-    /// Whether the hold key is physically down right now.
-    var keyCurrentlyDown: Bool { keyIsDown }
+    private var keyDown: [HoldKey: Bool] = [:]
+    private var pressStartedAt: [HoldKey: Date] = [:]
 
     private var retryTimer: Timer?
+
+    /// Whether any configured hold key is physically down right now.
+    var keyCurrentlyDown: Bool { keyDown.values.contains(true) }
 
     func start() {
         attemptStart()
@@ -76,28 +77,29 @@ final class HotkeyManager {
 
     private func handleFlagsChanged(_ event: CGEvent) {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let target = Settings.shared.hotkey
-        guard keyCode == target.keyCode else { return }
+        guard let key = HoldKey.allCases.first(where: { $0.keyCode == keyCode }) else { return }
+        guard Settings.shared.action(for: key) != .off else { return }
 
         let isDown: Bool
-        switch target {
+        switch key {
         case .fn: isDown = event.flags.contains(.maskSecondaryFn)
         case .rightCommand: isDown = event.flags.contains(.maskCommand)
         case .rightOption: isDown = event.flags.contains(.maskAlternate)
         }
 
-        if isDown && !keyIsDown {
-            keyIsDown = true
-            pressStartedAt = Date()
-            DispatchQueue.main.async { self.onPress?() }
-        } else if !isDown && keyIsDown {
-            keyIsDown = false
-            let held = pressStartedAt.map { Date().timeIntervalSince($0) } ?? 1
+        let wasDown = keyDown[key] ?? false
+        if isDown && !wasDown {
+            keyDown[key] = true
+            pressStartedAt[key] = Date()
+            DispatchQueue.main.async { self.onPress?(key) }
+        } else if !isDown && wasDown {
+            keyDown[key] = false
+            let held = pressStartedAt[key].map { Date().timeIntervalSince($0) } ?? 1
             DispatchQueue.main.async {
                 if held < 0.35 {
-                    self.onQuickTap?()
+                    self.onQuickTap?(key)
                 } else {
-                    self.onRelease?()
+                    self.onRelease?(key)
                 }
             }
         }

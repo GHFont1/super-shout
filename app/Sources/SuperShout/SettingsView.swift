@@ -4,7 +4,9 @@ import ServiceManagement
 struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var smartEntities = Settings.shared.smartEntities
-    @State private var hotkey = Settings.shared.hotkey
+    @State private var fnAction = Settings.shared.action(for: .fn)
+    @State private var rightCommandAction = Settings.shared.action(for: .rightCommand)
+    @State private var rightOptionAction = Settings.shared.action(for: .rightOption)
     @State private var removeFillers = Settings.shared.removeFillers
     @State private var language = Settings.shared.language
     @State private var smartSpacing = Settings.shared.smartSpacing
@@ -20,12 +22,20 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Activation") {
-                Picker("Hold to talk", selection: $hotkey) {
-                    ForEach(HoldKey.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            Section("Keys") {
+                Picker("fn (🌐)", selection: $fnAction) {
+                    ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
-                .onChange(of: hotkey) { Settings.shared.hotkey = hotkey; AppDelegate.shared?.rebuildMenu() }
-                Text("Hold the key and speak; release to insert. Quick-tap to lock hands-free, tap again to finish. Esc cancels.")
+                .onChange(of: fnAction) { Settings.shared.setAction(fnAction, for: .fn); AppDelegate.shared?.rebuildMenu() }
+                Picker("Right ⌘", selection: $rightCommandAction) {
+                    ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: rightCommandAction) { Settings.shared.setAction(rightCommandAction, for: .rightCommand); AppDelegate.shared?.rebuildMenu() }
+                Picker("Right ⌥", selection: $rightOptionAction) {
+                    ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: rightOptionAction) { Settings.shared.setAction(rightOptionAction, for: .rightOption); AppDelegate.shared?.rebuildMenu() }
+                Text("Dictate types your words. AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. Hold and speak; release to run. Quick-tap locks hands-free; Esc cancels.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Toggle("Start Super Shout at login", isOn: $launchAtLogin)
@@ -123,21 +133,19 @@ struct SettingsView: View {
                 }
             }
 
-            Section("AI Polish (optional, uses Claude API)") {
-                Toggle("Polish transcripts with Claude", isOn: $aiPolish)
-                    .onChange(of: aiPolish) { Settings.shared.aiPolishEnabled = aiPolish }
-                if aiPolish {
-                    SecureField("Anthropic API key", text: $apiKey)
-                        .onChange(of: apiKey) { Settings.shared.anthropicAPIKey = apiKey }
-                    Picker("Model", selection: $model) {
-                        Text("Claude Opus 5 (best)").tag("claude-opus-5")
-                        Text("Claude Sonnet 5").tag("claude-sonnet-5")
-                        Text("Claude Haiku 4.5 (fastest)").tag("claude-haiku-4-5")
-                    }
-                    .onChange(of: model) { Settings.shared.polishModel = model }
-                    Text("When off, nothing ever leaves this Mac. Transcription is always on-device.")
-                        .font(.caption).foregroundStyle(.secondary)
+            Section("Claude AI (powers AI Edit, AI Compose, and polish)") {
+                SecureField("Anthropic API key", text: $apiKey)
+                    .onChange(of: apiKey) { Settings.shared.anthropicAPIKey = apiKey }
+                Picker("Model", selection: $model) {
+                    Text("Claude Opus 5 (best)").tag("claude-opus-5")
+                    Text("Claude Sonnet 5").tag("claude-sonnet-5")
+                    Text("Claude Haiku 4.5 (fastest)").tag("claude-haiku-4-5")
                 }
+                .onChange(of: model) { Settings.shared.polishModel = model }
+                Toggle("Also polish plain dictation with Claude", isOn: $aiPolish)
+                    .onChange(of: aiPolish) { Settings.shared.aiPolishEnabled = aiPolish }
+                Text("The key is stored in your Keychain. Without a key, dictation works fully on-device and nothing ever leaves this Mac; AI Edit and AI Compose need the key.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

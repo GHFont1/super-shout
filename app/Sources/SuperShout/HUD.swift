@@ -16,7 +16,7 @@ final class HUDController {
         case .listening(let handsFree):
             model.reset()
             model.mode = .listening
-            model.statusText = handsFree ? "Listening (hands-free — tap again to finish)" : "Listening…"
+            model.statusText = handsFree ? "\(sessionLabel) (hands-free — tap again to finish)" : sessionLabel
             show()
         case .processing:
             model.mode = .processing
@@ -26,6 +26,22 @@ final class HUDController {
 
     func pushLevel(_ level: Float) { model.pushLevel(level) }
     func showPartial(_ text: String) { model.partialText = text }
+
+    private var sessionLabel = "Listening…"
+
+    /// Sets the label and accent color for the upcoming session so each mode
+    /// (dictate orange, AI edit purple, AI compose cyan) is visually distinct.
+    func configureSession(label: String, accent: Color) {
+        sessionLabel = label
+        model.accent = accent
+    }
+
+    /// Mid-processing status updates ("Asking Claude…").
+    func showStatus(_ text: String) {
+        model.mode = .processing
+        model.statusText = text
+        show()
+    }
 
     func flashDone(_ message: String) {
         model.mode = .done
@@ -93,6 +109,7 @@ final class HUDModel: ObservableObject {
     @Published var mode: HUDMode = .listening
     @Published var statusText = ""
     @Published var partialText = ""
+    @Published var accent: Color = .orange
     @Published var levels: [Float] = Array(repeating: 0.05, count: 28)
 
     func pushLevel(_ level: Float) {
@@ -120,7 +137,7 @@ struct ShoutBarView: View {
                     HStack(spacing: 2.5) {
                         ForEach(Array(model.levels.enumerated()), id: \.offset) { _, level in
                             RoundedRectangle(cornerRadius: 1.5)
-                                .fill(Color.orange)
+                                .fill(model.accent)
                                 .frame(width: 3, height: CGFloat(6 + level * 26))
                         }
                     }
@@ -157,7 +174,7 @@ struct ShoutBarView: View {
 
     private var iconColor: Color {
         switch model.mode {
-        case .listening: return .orange
+        case .listening: return model.accent
         case .processing: return .yellow
         case .done: return .green
         case .error: return .red
