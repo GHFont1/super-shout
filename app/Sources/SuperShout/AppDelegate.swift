@@ -29,11 +29,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
     }
 
+    private var axPollTimer: Timer?
+
     private func requestPermissions() {
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
         SFSpeechRecognizer.requestAuthorization { _ in }
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(opts)
+        if !AXIsProcessTrustedWithOptions(opts) {
+            showAccessibilityAlert()
+            axPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                if AXIsProcessTrusted() {
+                    self?.axPollTimer?.invalidate()
+                    self?.axPollTimer = nil
+                    self?.rebuildMenu()
+                }
+            }
+        }
+    }
+
+    private func showAccessibilityAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Enable Accessibility for Super Shout"
+        alert.informativeText = "The dictation hotkey needs Accessibility access.\n\nSystem Settings → Privacy & Security → Accessibility → turn ON Super Shout.\n\nDictation starts working the moment you flip the switch — no restart needed."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            openAccessibilitySettings()
+        }
+    }
+
+    @objc func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func updateIcon(for state: DictationState) {
@@ -52,6 +81,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Super Shout — hold \(hk) to talk", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
 
+        if !AXIsProcessTrusted() {
+            let warn = NSMenuItem(title: "⚠️ Grant Accessibility Access…", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            warn.target = self
+            menu.addItem(warn)
+            menu.addItem(.separator())
+        }
+
         if !controller.history.isEmpty {
             let historyItem = NSMenuItem(title: "Recent Transcripts", action: nil, keyEquivalent: "")
             let sub = NSMenu()
@@ -67,6 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(.separator())
         }
 
+        let teach = NSMenuItem(title: "Fix Last Transcript…", action: #selector(openTeach), keyEquivalent: "e")
+        teach.target = self
+        teach.isEnabled = !controller.history.isEmpty
+        menu.addItem(teach)
+
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -80,6 +121,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(controller.history[sender.tag], forType: .string)
+    }
+
+    private var teachWindow: NSWindow?
+
+    @objc func openTeach() {
+        let heard = controller.history.first ?? ""
+        let view = TeachView(heard: heard) { [weak self] in
+            self?.teachWindow?.close()
+            self?.teachWindow = nil
+        }
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.title = "Teach Super Shout"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        teachWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc func openSettings() {

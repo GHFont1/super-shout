@@ -12,7 +12,24 @@ final class HotkeyManager {
     private var keyIsDown = false
     private var pressStartedAt: Date?
 
+    private var retryTimer: Timer?
+
     func start() {
+        attemptStart()
+        // Permission may be granted after launch — keep retrying until the tap exists.
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            if self.eventTap != nil {
+                self.retryTimer?.invalidate()
+                self.retryTimer = nil
+            } else {
+                self.attemptStart()
+            }
+        }
+    }
+
+    private func attemptStart() {
+        guard eventTap == nil else { return }
         let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon!).takeUnretainedValue()
@@ -27,7 +44,7 @@ final class HotkeyManager {
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
+            options: .defaultTap,  // active tap: covered by Accessibility (listen-only would need Input Monitoring)
             eventsOfInterest: mask,
             callback: callback,
             userInfo: refcon
@@ -39,6 +56,7 @@ final class HotkeyManager {
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
+        NSLog("SuperShout: event tap active (AX trusted=\(AXIsProcessTrusted()))")
     }
 
     private func handleFlagsChanged(_ event: CGEvent) {

@@ -34,6 +34,21 @@ final class Settings {
         set { d.set(newValue, forKey: "removeFillers") }
     }
 
+    var autoPunctuate: Bool {
+        get { d.object(forKey: "autoPunctuate") as? Bool ?? true }
+        set { d.set(newValue, forKey: "autoPunctuate") }
+    }
+
+    var smartLists: Bool {
+        get { d.object(forKey: "smartLists") as? Bool ?? true }
+        set { d.set(newValue, forKey: "smartLists") }
+    }
+
+    var smartSpacing: Bool {
+        get { d.object(forKey: "smartSpacing") as? Bool ?? true }
+        set { d.set(newValue, forKey: "smartSpacing") }
+    }
+
     var aiPolishEnabled: Bool {
         get { d.bool(forKey: "aiPolishEnabled") }
         set { d.set(newValue, forKey: "aiPolishEnabled") }
@@ -58,5 +73,30 @@ final class Settings {
     var dictionary: [String: String] {
         get { (d.dictionary(forKey: "personalDictionary") as? [String: String]) ?? [:] }
         set { d.set(newValue, forKey: "personalDictionary") }
+    }
+
+    /// Terms fed to the speech recognizer as contextual hints so it spells them
+    /// correctly the first time (acronyms, brands, jargon).
+    var vocabulary: [String] {
+        get { (d.array(forKey: "vocabulary") as? [String]) ?? Settings.defaultVocabulary }
+        set { d.set(newValue, forKey: "vocabulary") }
+    }
+
+    static let defaultVocabulary = [
+        "UPC", "ASIN", "SKU", "GTIN", "EAN", "FBA", "FNSKU", "MPN", "MAP",
+        "Amazon", "Shopify", "eBay", "Walmart", "Temu", "TikTok Shop", "Duoplane",
+        "Great Call Athletics", "GCA", "Seller Central", "Notion", "Xero",
+        "purchase order", "PO", "vendor SKU", "retailer SKU", "inventory feed"
+    ]
+
+    /// Everything worth hinting to the recognizer: vocabulary plus both sides of
+    /// the personal dictionary.
+    var contextualStrings: [String] {
+        var terms = Set(vocabulary)
+        for (spoken, replacement) in dictionary {
+            terms.insert(spoken)
+            terms.insert(replacement)
+        }
+        return Array(terms).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 }

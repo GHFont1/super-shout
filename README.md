@@ -5,6 +5,9 @@ System-wide voice dictation for macOS, modeled on Wispr Flow but native, on-devi
 - Hold **fn** (or Right ⌘ / Right ⌥) → speak → release → clean text is inserted at the cursor in any app.
 - Quick-tap the hotkey for hands-free mode; tap again to finish.
 - On-device transcription (Apple Speech, `requiresOnDeviceRecognition`), automatic punctuation, filler-word removal, personal dictionary.
+- **Smart joining** (`ContextReader` + `SpacingEngine`): reads the character before the caret over the Accessibility API, then adds the right space, capitalizes after `.?!`, and lowercases a mid-sentence continuation.
+- **Auto-punctuation and list formatting** (`CleanupEngine` / `ListFormatter`): appends a period when missing; "I need eggs, milk, and bread" becomes a bulleted list (3+ items plus a cue word).
+- **Learning** (`LearningEngine` + Fix Last Transcript, ⌘E): word-level LCS diff between what it heard and your correction yields dictionary entries and vocabulary terms. Vocabulary is fed to `SFSpeechAudioBufferRecognitionRequest.contextualStrings` so terms like UPC/ASIN are recognized correctly up front.
 - Floating "Shout Bar" HUD with live waveform + partial transcript.
 - Optional Claude API polish (off by default, user-supplied key, model selectable in Settings).
 

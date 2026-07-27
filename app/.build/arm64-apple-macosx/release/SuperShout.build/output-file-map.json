@@ -22,6 +22,12 @@
     "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/CleanupEngine.swiftdeps",
     "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/CleanupEngine.dia"
   },
+  "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ContextReader.swift": {
+    "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader.swift.o",
+    "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader~partial.swiftmodule",
+    "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader.swiftdeps",
+    "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader.dia"
+  },
   "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/DictationController.swift": {
     "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/DictationController.swift.o",
     "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/DictationController~partial.swiftmodule",
@@ -40,6 +46,12 @@
     "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/HotkeyManager.swiftdeps",
     "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/HotkeyManager.dia"
   },
+  "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/LearningEngine.swift": {
+    "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine.swift.o",
+    "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine~partial.swiftmodule",
+    "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine.swiftdeps",
+    "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine.dia"
+  },
   "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Settings.swift": {
     "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/Settings.swift.o",
     "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/Settings~partial.swiftmodule",
@@ -51,6 +63,18 @@
     "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SettingsView~partial.swiftmodule",
     "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SettingsView.swiftdeps",
     "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SettingsView.dia"
+  },
+  "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SpacingEngine.swift": {
+    "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine.swift.o",
+    "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine~partial.swiftmodule",
+    "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine.swiftdeps",
+    "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine.dia"
+  },
+  "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TeachView.swift": {
+    "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView.swift.o",
+    "swiftmodule": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView~partial.swiftmodule",
+    "swift-dependencies": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView.swiftdeps",
+    "diagnostics": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView.dia"
   },
   "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TextInjector.swift": {
     "object": "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TextInjector.swift.o",

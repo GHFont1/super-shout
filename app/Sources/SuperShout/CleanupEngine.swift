@@ -38,6 +38,78 @@ enum CleanupEngine {
         if let first = text.first, first.isLowercase {
             text = first.uppercased() + text.dropFirst()
         }
+
+        if Settings.shared.autoPunctuate { text = ensureTerminalPunctuation(text) }
+        if Settings.shared.smartLists { text = ListFormatter.formatLists(in: text) }
+
         return text
+    }
+
+    /// Adds a period when the utterance ends without terminal punctuation.
+    private static func ensureTerminalPunctuation(_ text: String) -> String {
+        guard let last = text.last else { return text }
+        let terminals: Set<Character> = [".", "!", "?", ":", ";", ",", "\"", ")", "]", "-", "…"]
+        if terminals.contains(last) { return text }
+        // Don't punctuate a bare fragment that is clearly a single word command.
+        return text + "."
+    }
+}
+
+/// Turns spoken enumerations ("I need eggs, milk, and bread") into bulleted lists.
+enum ListFormatter {
+    private static let cueWords = "need|needs|buy|get|grab|pick up|want|wants|includes?|including|following|list of|items?|tasks?|todos?|steps?|bring"
+
+    static func formatLists(in text: String) -> String {
+        let sentences = splitSentences(text)
+        var out: [String] = []
+        for sentence in sentences {
+            out.append(formatSentence(sentence) ?? sentence)
+        }
+        return out.joined(separator: " ")
+            .replacingOccurrences(of: " \n", with: "\n")
+            .replacingOccurrences(of: "\n ", with: "\n")
+    }
+
+    private static func splitSentences(_ text: String) -> [String] {
+        var result: [String] = []
+        var current = ""
+        for ch in text {
+            current.append(ch)
+            if ch == "." || ch == "!" || ch == "?" {
+                result.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            }
+        }
+        let tail = current.trimmingCharacters(in: .whitespaces)
+        if !tail.isEmpty { result.append(tail) }
+        return result
+    }
+
+    /// Returns a bulleted rewrite, or nil if the sentence isn't a list.
+    private static func formatSentence(_ sentence: String) -> String? {
+        let pattern = "(?i)^(.*?\\b(?:\(cueWords))\\b[^,]*?)\\s+((?:[^,]+,\\s*){2,}(?:and\\s+|or\\s+)?[^,.!?]+)[.!?]?$"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let m = regex.firstMatch(in: sentence, range: NSRange(sentence.startIndex..., in: sentence)),
+              let leadRange = Range(m.range(at: 1), in: sentence),
+              let itemsRange = Range(m.range(at: 2), in: sentence)
+        else { return nil }
+
+        let lead = String(sentence[leadRange]).trimmingCharacters(in: .whitespaces)
+        let itemsBlob = String(sentence[itemsRange])
+
+        let items = itemsBlob
+            .components(separatedBy: ",")
+            .map { part -> String in
+                part.trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: #"(?i)^(and|or)\s+"#, with: "", options: .regularExpression)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ".!? "))
+            }
+            .filter { !$0.isEmpty }
+
+        guard items.count >= 3 else { return nil }
+
+        let bullets = items.map { "- \($0)" }.joined(separator: "\n")
+        let leadWithColon = lead.hasSuffix(":") ? lead : lead + ":"
+        return "\n\(leadWithColon)\n\(bullets)"
     }
 }

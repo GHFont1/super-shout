@@ -1,11 +1,15 @@
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/AppDelegate.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/ClaudePolish.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/CleanupEngine.swift.o
+/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/ContextReader.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/DictationController.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/HUD.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/HotkeyManager.swift.o
+/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/LearningEngine.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/Settings.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/SettingsView.swift.o
+/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/SpacingEngine.swift.o
+/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/TeachView.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/TextInjector.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/Transcriber.swift.o
 /Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/debug/SuperShout.build/main.swift.o

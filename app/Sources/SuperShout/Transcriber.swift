@@ -25,6 +25,8 @@ final class Transcriber: NSObject {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
+        // Bias recognition toward the user's own vocabulary (UPC, ASIN, brand names…)
+        request.contextualStrings = Array(Settings.shared.contextualStrings.prefix(200))
         if recognizer.supportsOnDeviceRecognition {
             request.requiresOnDeviceRecognition = true
         }

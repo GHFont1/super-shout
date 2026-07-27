@@ -36,6 +36,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ContextReader.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/DictationController.swift"
         },
         {
@@ -48,11 +52,23 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/LearningEngine.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Settings.swift"
         },
         {
           "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SettingsView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SpacingEngine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TeachView.swift"
         },
         {
           "kind" : "file",
@@ -82,11 +98,15 @@
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/AppDelegate.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ClaudePolish.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/CleanupEngine.swift.o",
+        "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/DictationController.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/HUD.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/HotkeyManager.swift.o",
+        "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/Settings.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SettingsView.swift.o",
+        "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine.swift.o",
+        "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TextInjector.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/Transcriber.swift.o",
         "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/main.swift.o"
@@ -153,6 +173,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/DictationController.swift.o"
         },
         {
@@ -165,11 +189,23 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/Settings.swift.o"
         },
         {
           "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SettingsView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView.swift.o"
         },
         {
           "kind" : "file",
@@ -193,11 +229,15 @@
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/AppDelegate.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ClaudePolish.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/CleanupEngine.swift",
+        "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ContextReader.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/DictationController.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/HUD.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/HotkeyManager.swift",
+        "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/LearningEngine.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Settings.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SettingsView.swift",
+        "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SpacingEngine.swift",
+        "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TeachView.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TextInjector.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Transcriber.swift",
         "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/main.swift"
@@ -220,11 +260,15 @@
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/AppDelegate.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ClaudePolish.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/CleanupEngine.swift",
+      "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ContextReader.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/DictationController.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/HUD.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/HotkeyManager.swift",
+      "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/LearningEngine.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Settings.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SettingsView.swift",
+      "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SpacingEngine.swift",
+      "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TeachView.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TextInjector.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Transcriber.swift",
       "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/main.swift",
@@ -316,6 +360,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/ContextReader.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/DictationController.swift"
         },
         {
@@ -328,11 +376,23 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/LearningEngine.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/Settings.swift"
         },
         {
           "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SettingsView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/SpacingEngine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/Sources/SuperShout/TeachView.swift"
         },
         {
           "kind" : "file",
@@ -370,6 +430,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/ContextReader.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/DictationController.swift.o"
         },
         {
@@ -382,11 +446,23 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/LearningEngine.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/Settings.swift.o"
         },
         {
           "kind" : "file",
           "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SettingsView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/SpacingEngine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/quantum/Projects/super-shout/app/.build/arm64-apple-macosx/release/SuperShout.build/TeachView.swift.o"
         },
         {
           "kind" : "file",

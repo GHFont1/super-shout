@@ -4,10 +4,14 @@ struct SettingsView: View {
     @State private var hotkey = Settings.shared.hotkey
     @State private var removeFillers = Settings.shared.removeFillers
     @State private var language = Settings.shared.language
+    @State private var smartSpacing = Settings.shared.smartSpacing
+    @State private var autoPunctuate = Settings.shared.autoPunctuate
+    @State private var smartLists = Settings.shared.smartLists
     @State private var aiPolish = Settings.shared.aiPolishEnabled
     @State private var apiKey = Settings.shared.anthropicAPIKey
     @State private var model = Settings.shared.polishModel
     @State private var dictEntries: [(String, String)] = Settings.shared.dictionary.sorted { $0.key < $1.key }
+    @State private var vocabText = Settings.shared.vocabulary.joined(separator: "\n")
     @State private var newSpoken = ""
     @State private var newReplacement = ""
 
@@ -35,6 +39,39 @@ struct SettingsView: View {
                 .onChange(of: language) { Settings.shared.language = language }
                 Toggle("Remove filler words (um, uh, you know)", isOn: $removeFillers)
                     .onChange(of: removeFillers) { Settings.shared.removeFillers = removeFillers }
+            }
+
+            Section("Formatting") {
+                Toggle("Smart spacing and sentence casing", isOn: $smartSpacing)
+                    .onChange(of: smartSpacing) { Settings.shared.smartSpacing = smartSpacing }
+                Text("Adds a space when you continue after existing text, capitalizes after a period, and keeps mid-sentence words lowercase.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Toggle("End sentences with punctuation", isOn: $autoPunctuate)
+                    .onChange(of: autoPunctuate) { Settings.shared.autoPunctuate = autoPunctuate }
+
+                Toggle("Turn spoken lists into bullets", isOn: $smartLists)
+                    .onChange(of: smartLists) { Settings.shared.smartLists = smartLists }
+                Text("\"I need eggs, milk, and bread\" becomes a bulleted list of three items.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Vocabulary") {
+                Text("Words and phrases Super Shout should expect to hear — acronyms, brands, product jargon. These bias recognition so they come out right the first time.")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $vocabText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(height: 120)
+                    .onChange(of: vocabText) {
+                        Settings.shared.vocabulary = vocabText
+                            .split(separator: "\n")
+                            .map { $0.trimmingCharacters(in: .whitespaces) }
+                            .filter { !$0.isEmpty }
+                    }
+                Button("Restore default vocabulary") {
+                    Settings.shared.vocabulary = Settings.defaultVocabulary
+                    vocabText = Settings.defaultVocabulary.joined(separator: "\n")
+                }
             }
 
             Section("Personal Dictionary") {

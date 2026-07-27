@@ -50,9 +50,11 @@ final class DictationController {
         do {
             try t.begin()
             state = .listening(handsFree: handsFree)
+            NSLog("SuperShout: listening (handsFree=\(handsFree))")
         } catch {
             transcriber = nil
             handsFreeActive = false
+            NSLog("SuperShout: failed to start listening — \(error.localizedDescription)")
             hud.flashError(error.localizedDescription)
         }
     }
@@ -68,6 +70,7 @@ final class DictationController {
             guard let self else { return }
             self.transcriber = nil
             let cleaned = CleanupEngine.clean(raw)
+            NSLog("SuperShout: transcript=\"\(cleaned)\"")
             guard !cleaned.isEmpty else {
                 self.state = .idle
                 return

@@ -32,7 +32,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP"
+# Sign with a real identity when available so TCC grants survive rebuilds.
+IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/{print $2; exit}')
+codesign --force --deep --sign "${IDENTITY:--}" --identifier com.gca.supershout "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
