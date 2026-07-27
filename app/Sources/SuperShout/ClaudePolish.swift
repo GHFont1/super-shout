@@ -82,6 +82,27 @@ enum ClaudePolish {
 
     static var isDeepAvailable: Bool { cliPath("claude") != nil }
 
+    /// AI Ask mode: answers a spoken question in the chat window. The
+    /// transcript carries the whole conversation so follow-ups have context.
+    /// With the Claude Code provider it may use tools (web search, local
+    /// lookups) for current or local questions.
+    static func ask(_ transcript: String, completion: @escaping (String?) -> Void) {
+        let system = "You are a helpful chat assistant. Answer the user's latest message directly and completely, "
+            + "the way a chat assistant would. Conversational plain text; short lists are fine. "
+            + "If the question needs current or local information and you have tools available (web search, shell), use them. "
+            + "Never use em dashes."
+            + businessContextBlock()
+        switch Settings.shared.aiProvider {
+        case .claudeCode:
+            runDeepClaude(system: system, user: transcript, completion: completion)
+        case .claudeAPI:
+            sendAPI(system: system, user: transcript, maxTokens: 4096, timeout: 30,
+                    model: Settings.shared.polishModel, completion: completion)
+        case .codexCLI:
+            runCLI(system: system, user: transcript, completion: completion)
+        }
+    }
+
     /// AI Do mode: a Claude Code agent run that CARRIES OUT the spoken request
     /// (file the selection in Notion, save a note, run a lookup-and-record) and
     /// reports what it did. Guardrailed: drafts only for outbound messages,

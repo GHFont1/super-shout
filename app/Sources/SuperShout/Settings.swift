@@ -17,7 +17,7 @@ enum AIProvider: String, CaseIterable, Codable {
 
 /// What holding a given key does.
 enum KeyAction: String, CaseIterable, Codable {
-    case dictate, aiRewrite, aiEdit, aiCompose, aiDeep, aiAgent, off
+    case dictate, aiRewrite, aiEdit, aiCompose, aiDeep, aiAgent, aiAsk, off
 
     var displayName: String {
         switch self {
@@ -27,6 +27,7 @@ enum KeyAction: String, CaseIterable, Codable {
         case .aiCompose: return "AI Compose"
         case .aiDeep: return "AI Deep Research"
         case .aiAgent: return "AI Do (take action)"
+        case .aiAsk: return "AI Ask (chat window)"
         case .off: return "Off"
         }
     }

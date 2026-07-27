@@ -121,7 +121,7 @@ final class DictationController {
         capturedSelection = nil
         sessionApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         sessionAppName = NSWorkspace.shared.frontmostApplication?.localizedName
-        if action == .aiEdit || action == .aiAgent {
+        if action == .aiEdit || action == .aiAgent || action == .aiAsk {
             // Grab the selection now, while it's still highlighted; dictation
             // runs concurrently with the (possibly async) capture.
             SelectionReader.capture { [weak self] selection in
@@ -156,6 +156,7 @@ final class DictationController {
         case .aiRewrite: return "AI Rewrite — speak freely, it types it your way…"
         case .aiDeep: return "Deep Research — say what to look up and write…"
         case .aiAgent: return "AI Do — say what to do (with the selection)…"
+        case .aiAsk: return "AI Ask — ask anything…"
         case .aiEdit: return "AI Edit — say what to change…"
         case .aiCompose: return "AI Compose — say what to write…"
         case .off: return ""
@@ -168,6 +169,7 @@ final class DictationController {
         case .aiRewrite: return .green
         case .aiDeep: return .indigo
         case .aiAgent: return .pink
+        case .aiAsk: return .mint
         case .aiEdit: return .purple
         case .aiCompose: return .cyan
         case .off: return .orange
@@ -201,6 +203,8 @@ final class DictationController {
                 self.finishDeep(raw)
             case .aiAgent:
                 self.finishAgent(raw)
+            case .aiAsk:
+                self.finishAsk(raw)
             }
         }
     }
@@ -323,6 +327,22 @@ final class DictationController {
                 }
             }
         }
+    }
+
+    /// AI Ask: the question opens the chat window and the answer lands there —
+    /// nothing is typed into the focused app.
+    private func finishAsk(_ raw: String) {
+        var opts = CleanupEngine.CleanOptions()
+        opts.allowLists = false
+        let question = CleanupEngine.clean(raw, options: opts)
+        guard !question.isEmpty else {
+            state = .idle
+            return
+        }
+        let selection = capturedSelection
+        Log.write("ASK: \"\(question.prefix(100))\" selection=\(selection?.count ?? 0) chars")
+        state = .idle
+        AskWindowController.shared.ask(question, selection: selection)
     }
 
     private func finishRewrite(_ raw: String) {
