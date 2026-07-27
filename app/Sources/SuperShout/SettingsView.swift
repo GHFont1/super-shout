@@ -21,9 +21,15 @@ struct SettingsView: View {
     @State private var soundCues = Settings.shared.soundCues
     @State private var hudPosition = Settings.shared.hudPosition
     @State private var smartEntities = Settings.shared.smartEntities
-    @State private var fnAction = Settings.shared.action(for: .fn)
-    @State private var rightCommandAction = Settings.shared.action(for: .rightCommand)
-    @State private var rightOptionAction = Settings.shared.action(for: .rightOption)
+    /// Data-driven key rows: one picker per key, bound straight to Settings.
+    private func keyRow(_ key: HoldKey) -> some View {
+        Picker(key.displayName, selection: Binding(
+            get: { Settings.shared.action(for: key) },
+            set: { Settings.shared.setAction($0, for: key); AppDelegate.shared?.rebuildMenu() }
+        )) {
+            ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+        }
+    }
     @State private var removeFillers = Settings.shared.removeFillers
     @State private var language = Settings.shared.language
     @State private var smartSpacing = Settings.shared.smartSpacing
@@ -45,19 +51,17 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Keys") {
-                Picker("fn (🌐)", selection: $fnAction) {
-                    ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                ForEach(HoldKey.primary, id: \.self) { key in
+                    keyRow(key)
                 }
-                .onChange(of: fnAction) { Settings.shared.setAction(fnAction, for: .fn); AppDelegate.shared?.rebuildMenu() }
-                Picker("Right ⌘", selection: $rightCommandAction) {
-                    ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                DisclosureGroup("More keys (Right ⇧, F1–F19)") {
+                    ForEach(HoldKey.allCases.filter { !HoldKey.primary.contains($0) }, id: \.self) { key in
+                        keyRow(key)
+                    }
+                    Text("A bound F-key is captured by Super Shout while the app runs (its normal function won't fire). On laptop keyboards, F1–F12 may need “Use F1, F2, etc. as standard function keys” in System Settings → Keyboard. F13–F19 on full-size keyboards are ideal — they do nothing else.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                .onChange(of: rightCommandAction) { Settings.shared.setAction(rightCommandAction, for: .rightCommand); AppDelegate.shared?.rebuildMenu() }
-                Picker("Right ⌥", selection: $rightOptionAction) {
-                    ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .onChange(of: rightOptionAction) { Settings.shared.setAction(rightOptionAction, for: .rightOption); AppDelegate.shared?.rebuildMenu() }
-                Text("Dictate types your words. AI Rewrite retypes everything you said in your own voice, formatted for where you're typing (emails become emails). AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. Hold and speak; release to run; Esc cancels.")
+                Text("Dictate types your words. AI Rewrite retypes everything you said in your own voice, formatted for where you're typing (emails become emails). AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. AI Deep Research looks facts up first, then writes. AI Do carries out the request and reports back. Hold and speak; release to run; Esc cancels.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Toggle("Quick-tap locks hands-free dictation", isOn: $handsFreeTap)

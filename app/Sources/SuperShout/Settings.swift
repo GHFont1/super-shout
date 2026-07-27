@@ -35,13 +35,29 @@ enum KeyAction: String, CaseIterable, Codable {
 }
 
 enum HoldKey: String, CaseIterable, Codable {
-    case fn, rightCommand, rightOption
+    case fn, rightCommand, rightOption, rightShift
+    case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
+    case f13, f14, f15, f16, f17, f18, f19
+
+    /// The always-visible keys in Settings; the rest live under "More keys".
+    static let primary: [HoldKey] = [.fn, .rightCommand, .rightOption]
+
+    /// Modifier keys arrive as flagsChanged events; F-keys and Right ⇧-as-F
+    /// arrive as keyDown/keyUp. Right Shift is a modifier.
+    var isModifier: Bool {
+        switch self {
+        case .fn, .rightCommand, .rightOption, .rightShift: return true
+        default: return false
+        }
+    }
 
     var displayName: String {
         switch self {
         case .fn: return "fn (🌐)"
         case .rightCommand: return "Right ⌘"
         case .rightOption: return "Right ⌥"
+        case .rightShift: return "Right ⇧"
+        default: return rawValue.uppercased()
         }
     }
 
@@ -50,6 +66,26 @@ enum HoldKey: String, CaseIterable, Codable {
         case .fn: return 63
         case .rightCommand: return 54
         case .rightOption: return 61
+        case .rightShift: return 60
+        case .f1: return 122
+        case .f2: return 120
+        case .f3: return 99
+        case .f4: return 118
+        case .f5: return 96
+        case .f6: return 97
+        case .f7: return 98
+        case .f8: return 100
+        case .f9: return 101
+        case .f10: return 109
+        case .f11: return 103
+        case .f12: return 111
+        case .f13: return 105
+        case .f14: return 107
+        case .f15: return 113
+        case .f16: return 106
+        case .f17: return 64
+        case .f18: return 79
+        case .f19: return 80
         }
     }
 }
@@ -84,8 +120,11 @@ final class Settings {
             return action
         }
         if key == hotkey { return .dictate }
-        let remaining = HoldKey.allCases.filter { $0 != hotkey }
-        return key == remaining.first ? .aiEdit : .aiRewrite
+        switch key {
+        case .rightCommand: return .aiEdit
+        case .rightOption: return .aiRewrite
+        default: return .off  // extra keys start unbound
+        }
     }
 
     func setAction(_ action: KeyAction, for key: HoldKey) {

@@ -41,19 +41,30 @@ final class HotkeyManager {
 
     private func attemptStart() {
         guard eventTap == nil else { return }
-        let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
+        let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
+            | (1 << CGEventType.keyDown.rawValue)
+            | (1 << CGEventType.keyUp.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon!).takeUnretainedValue()
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 if let tap = manager.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
                 return Unmanaged.passUnretained(event)
             }
-            if type == .keyDown {
-                manager.sawOtherKey = true
+            if type == .keyDown || type == .keyUp {
                 let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-                if keyCode == 53, manager.isListening?() == true {  // Esc cancels dictation
-                    DispatchQueue.main.async { manager.onEscape?() }
-                    return nil  // swallow so the focused app doesn't also react
+                if type == .keyDown {
+                    manager.sawOtherKey = true
+                    if keyCode == 53, manager.isListening?() == true {  // Esc cancels dictation
+                        DispatchQueue.main.async { manager.onEscape?() }
+                        return nil  // swallow so the focused app doesn't also react
+                    }
+                }
+                // Non-modifier hold keys (F-keys) arrive here, not as flagsChanged.
+                if let key = HoldKey.allCases.first(where: { !$0.isModifier && $0.keyCode == keyCode }),
+                   Settings.shared.action(for: key) != .off {
+                    if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return nil }
+                    manager.updateKeyState(key, isDown: type == .keyDown)
+                    return nil  // swallow so the F-key's normal function doesn't also fire
                 }
                 return Unmanaged.passUnretained(event)
             }
@@ -103,8 +114,14 @@ final class HotkeyManager {
         case .fn: isDown = event.flags.contains(.maskSecondaryFn)
         case .rightCommand: isDown = event.flags.contains(.maskCommand)
         case .rightOption: isDown = event.flags.contains(.maskAlternate)
+        case .rightShift: isDown = event.flags.contains(.maskShift)
+        default: return  // F-keys never arrive as flagsChanged
         }
 
+        updateKeyState(key, isDown: isDown)
+    }
+
+    private func updateKeyState(_ key: HoldKey, isDown: Bool) {
         let wasDown = keyDown[key] ?? false
         if isDown && !wasDown {
             keyDown[key] = true
