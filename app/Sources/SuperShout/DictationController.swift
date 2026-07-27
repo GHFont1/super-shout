@@ -17,8 +17,9 @@ final class DictationController {
     var onStateChange: ((DictationState) -> Void)?
     private(set) var history: [String] = Settings.shared.historyStore
 
-    /// Apps where dictation must stay literal: no auto-punctuation or list
-    /// formatting in a shell prompt.
+    /// Terminal apps: list formatting stays off there (a synthetic newline in
+    /// a shell prompt can execute a command), but sentence punctuation stays
+    /// ON — dictating prose prompts to CLI tools is a primary use.
     private static let codeSafeApps: Set<String> = [
         "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp",
         "net.kovidgoyal.kitty", "com.github.wez.wezterm"
@@ -272,15 +273,17 @@ final class DictationController {
     }
 
     /// Tailors cleanup to where the text is going: search fields get no
-    /// terminal period (queries aren't sentences), terminals get literal text.
+    /// terminal period (queries aren't sentences); terminals keep sentence
+    /// punctuation but never get synthetic newlines.
     private func currentCleanOptions() -> CleanupEngine.CleanOptions {
         var opts = CleanupEngine.CleanOptions()
         let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         let codeSafe = Self.codeSafeApps.contains(bundleID)
         let searchField = ContextReader.isSearchFieldFocused()
-        opts.allowTerminalPunctuation = !searchField && !codeSafe
+        opts.allowTerminalPunctuation = !searchField
         opts.allowLists = !searchField && !codeSafe
         opts.stripTrailingPeriod = searchField
+        Log.write("cleanOptions: app=\(bundleID) codeSafe=\(codeSafe) searchField=\(searchField)")
         return opts
     }
 
