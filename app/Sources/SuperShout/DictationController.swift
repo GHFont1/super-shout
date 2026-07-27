@@ -121,7 +121,7 @@ final class DictationController {
         capturedSelection = nil
         sessionApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         sessionAppName = NSWorkspace.shared.frontmostApplication?.localizedName
-        if action == .aiEdit {
+        if action == .aiEdit || action == .aiAgent {
             // Grab the selection now, while it's still highlighted; dictation
             // runs concurrently with the (possibly async) capture.
             SelectionReader.capture { [weak self] selection in
@@ -155,6 +155,7 @@ final class DictationController {
         case .dictate: return "Listening…"
         case .aiRewrite: return "AI Rewrite — speak freely, it types it your way…"
         case .aiDeep: return "Deep Research — say what to look up and write…"
+        case .aiAgent: return "AI Do — say what to do (with the selection)…"
         case .aiEdit: return "AI Edit — say what to change…"
         case .aiCompose: return "AI Compose — say what to write…"
         case .off: return ""
@@ -166,6 +167,7 @@ final class DictationController {
         case .dictate: return .orange
         case .aiRewrite: return .green
         case .aiDeep: return .indigo
+        case .aiAgent: return .pink
         case .aiEdit: return .purple
         case .aiCompose: return .cyan
         case .off: return .orange
@@ -197,6 +199,8 @@ final class DictationController {
                 self.finishAI(raw, action: action)
             case .aiDeep:
                 self.finishDeep(raw)
+            case .aiAgent:
+                self.finishAgent(raw)
             }
         }
     }
@@ -279,6 +283,43 @@ final class DictationController {
                     self.hud.flashInfo("Deep research done — result copied, press ⌘V (also in Recent Transcripts)")
                 } else {
                     self.hud.flashError("Deep research failed — see ~/Library/Logs/SuperShout.log")
+                }
+            }
+        }
+    }
+
+    /// AI Do: hand the instruction (+ any selection) to a background agent
+    /// that actually performs the task, then report what happened. Never
+    /// blocks dictation while it works.
+    private func finishAgent(_ raw: String) {
+        var opts = CleanupEngine.CleanOptions()
+        opts.allowTerminalPunctuation = false
+        opts.allowLists = false
+        let instruction = CleanupEngine.clean(raw, options: opts)
+        guard !instruction.isEmpty else {
+            state = .idle
+            return
+        }
+        guard ClaudePolish.isDeepAvailable else {
+            state = .idle
+            hud.flashError("AI Do needs the Claude Code CLI installed")
+            return
+        }
+        let selection = capturedSelection
+        Log.write("AGENT instruction: \"\(instruction.prefix(120))\" selection=\(selection?.count ?? 0) chars")
+        state = .idle
+        hud.flashInfo("On it — working in the background, I'll report when done")
+        ClaudePolish.agentAct(instruction: instruction, selection: selection) { [weak self] report in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let report {
+                    self.history.insert(report, at: 0)
+                    if self.history.count > 25 { self.history.removeLast() }
+                    Settings.shared.historyStore = self.history
+                    SoundCue.listenStop.play()
+                    self.hud.flashInfo("Done: \(report.prefix(90))")
+                } else {
+                    self.hud.flashError("AI Do failed — see ~/Library/Logs/SuperShout.log")
                 }
             }
         }

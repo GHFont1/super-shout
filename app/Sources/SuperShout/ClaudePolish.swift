@@ -82,6 +82,27 @@ enum ClaudePolish {
 
     static var isDeepAvailable: Bool { cliPath("claude") != nil }
 
+    /// AI Do mode: a Claude Code agent run that CARRIES OUT the spoken request
+    /// (file the selection in Notion, save a note, run a lookup-and-record) and
+    /// reports what it did. Guardrailed: drafts only for outbound messages,
+    /// never touches customer orders, no destructive changes.
+    static func agentAct(instruction: String, selection: String?, completion: @escaping (String?) -> Void) {
+        let system = "You are an assistant with hands, running on the user's own Mac via Claude Code with access to their files, "
+            + "MCP servers, and shell. Carry out the spoken request now — actually do it, don't describe how. "
+            + "If SELECTED TEXT is provided, the request refers to it. "
+            + "Hard rules that override the request: never send emails or messages (create drafts instead and say so); "
+            + "never cancel, refund, or modify customer or marketplace orders; "
+            + "never make destructive or irreversible changes that were not explicitly requested. "
+            + "When finished, return a 1-3 sentence report of exactly what you did, naming anything you created (with links or paths). "
+            + "If you could not complete it, say exactly why and what is needed. Never use em dashes."
+            + businessContextBlock()
+        var user = instruction
+        if let selection, !selection.isEmpty {
+            user += "\n\nSELECTED TEXT:\n" + selection
+        }
+        runDeepClaude(system: system, user: user, completion: completion)
+    }
+
     /// Dedicated deep runner: always the Claude Code CLI (agentic, tool-using),
     /// from $HOME so global CLAUDE.md and MCP config load, with a 10 min cap.
     private static func runDeepClaude(system: String, user: String, completion: @escaping (String?) -> Void) {
