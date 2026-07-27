@@ -70,11 +70,10 @@ final class HUDController {
 
     private func show() {
         if panel == nil { buildPanel() }
-        // Re-center every time — the main screen may have changed since the
-        // panel was built (display plugged/unplugged, resolution change).
+        // Re-position every time — the main screen or the position preference
+        // may have changed since the panel was built.
         if let panel, let screen = NSScreen.main {
-            let f = screen.visibleFrame
-            panel.setFrameOrigin(NSPoint(x: f.midX - panel.frame.width / 2, y: f.minY + 24))
+            panel.setFrameOrigin(Self.origin(for: panel.frame.width, on: screen))
         }
         panel?.orderFrontRegardless()
     }
@@ -105,10 +104,20 @@ final class HUDController {
         panel.contentView?.addSubview(hosting)
 
         if let screen = NSScreen.main {
-            let f = screen.visibleFrame
-            panel.setFrameOrigin(NSPoint(x: f.midX - width / 2, y: f.minY + 24))
+            panel.setFrameOrigin(Self.origin(for: width, on: screen))
         }
         self.panel = panel
+    }
+
+    private static func origin(for width: CGFloat, on screen: NSScreen) -> NSPoint {
+        let f = screen.visibleFrame
+        let x: CGFloat
+        switch Settings.shared.hudPosition {
+        case .bottomLeft: x = f.minX + 24
+        case .bottomCenter: x = f.midX - width / 2
+        case .bottomRight: x = f.maxX - width - 24
+        }
+        return NSPoint(x: x, y: f.minY + 24)
     }
 }
 

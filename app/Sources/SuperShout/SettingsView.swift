@@ -1,8 +1,24 @@
 import SwiftUI
 import ServiceManagement
+import Speech
 
 struct SettingsView: View {
+    /// Every locale the on-device recognizer supports, nicely named.
+    private static let languageChoices: [(id: String, name: String)] = {
+        let current = Locale.current
+        return SFSpeechRecognizer.supportedLocales()
+            .map { locale -> (String, String) in
+                let id = locale.identifier.replacingOccurrences(of: "_", with: "-")
+                let name = current.localizedString(forIdentifier: locale.identifier) ?? id
+                return (id, name)
+            }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+    }()
+
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var spokenCommands = Settings.shared.spokenCommands
+    @State private var soundCues = Settings.shared.soundCues
+    @State private var hudPosition = Settings.shared.hudPosition
     @State private var smartEntities = Settings.shared.smartEntities
     @State private var fnAction = Settings.shared.action(for: .fn)
     @State private var rightCommandAction = Settings.shared.action(for: .rightCommand)
@@ -55,17 +71,19 @@ struct SettingsView: View {
 
             Section("Transcription") {
                 Picker("Language", selection: $language) {
-                    Text("English (US)").tag("en-US")
-                    Text("English (UK)").tag("en-GB")
-                    Text("Spanish").tag("es-ES")
-                    Text("French").tag("fr-FR")
-                    Text("German").tag("de-DE")
-                    Text("Italian").tag("it-IT")
-                    Text("Portuguese (BR)").tag("pt-BR")
+                    ForEach(Self.languageChoices, id: \.id) { choice in
+                        Text(choice.name).tag(choice.id)
+                    }
                 }
                 .onChange(of: language) { Settings.shared.language = language }
                 Toggle("Remove filler words (um, uh, you know)", isOn: $removeFillers)
                     .onChange(of: removeFillers) { Settings.shared.removeFillers = removeFillers }
+                Toggle("Play a soft click when listening starts and stops", isOn: $soundCues)
+                    .onChange(of: soundCues) { Settings.shared.soundCues = soundCues }
+                Picker("Shout Bar position", selection: $hudPosition) {
+                    ForEach(HUDPosition.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: hudPosition) { Settings.shared.hudPosition = hudPosition }
             }
 
             Section("Formatting") {
@@ -80,6 +98,11 @@ struct SettingsView: View {
                 Toggle("Turn spoken lists into bullets", isOn: $smartLists)
                     .onChange(of: smartLists) { Settings.shared.smartLists = smartLists }
                 Text("\"I need eggs, milk, and bread\" becomes a bulleted list of three items.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Toggle("Spoken commands", isOn: $spokenCommands)
+                    .onChange(of: spokenCommands) { Settings.shared.spokenCommands = spokenCommands }
+                Text("Say \"new line\" or \"new paragraph\" for line breaks, \"scratch that\" to erase the last sentence and retake it, and \"press enter\" at the end to send the message.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Toggle("Fix product and vehicle names", isOn: $smartEntities)

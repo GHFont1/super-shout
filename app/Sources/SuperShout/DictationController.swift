@@ -36,6 +36,9 @@ final class DictationController {
     private var capturedSelection: String?
     /// Frontmost app when dictation started — results only auto-paste there.
     private var sessionApp: String?
+    /// Human-readable app name at session start, given to the AI as context.
+    private var sessionAppName: String?
+    private var listenStartedAt: Date?
 
     var canUndo: Bool { injector.lastInserted != nil }
 
@@ -110,6 +113,7 @@ final class DictationController {
         activeAction = action
         capturedSelection = nil
         sessionApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        sessionAppName = NSWorkspace.shared.frontmostApplication?.localizedName
         if action == .aiEdit {
             // Grab the selection now, while it's still highlighted; dictation
             // runs concurrently with the (possibly async) capture.
@@ -127,6 +131,8 @@ final class DictationController {
         t.onPartial = { [weak self] text in self?.hud.showPartial(text) }
         do {
             try t.begin()
+            listenStartedAt = Date()
+            SoundCue.listenStart.play()
             state = .listening(handsFree: handsFree)
             NSLog("SuperShout: listening (action=\(action.rawValue), handsFree=\(handsFree))")
         } catch {
@@ -161,6 +167,11 @@ final class DictationController {
             return
         }
         handsFreeActive = false
+        SoundCue.listenStop.play()
+        if let started = listenStartedAt {
+            Settings.shared.totalSecondsDictated += Date().timeIntervalSince(started)
+            listenStartedAt = nil
+        }
         state = .processing
         let action = activeAction
         t.finish { [weak self] raw in
@@ -176,19 +187,30 @@ final class DictationController {
     }
 
     private func finishDictation(_ raw: String) {
-        let cleaned = CleanupEngine.clean(raw, options: currentCleanOptions())
-        Log.write("transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars)")
+        var cleaned = CleanupEngine.clean(raw, options: currentCleanOptions())
+        // Spoken "press enter" at the end sends the message after inserting —
+        // chat boxes, terminal prompts, AI chats.
+        var pressEnter = false
+        if Settings.shared.spokenCommands,
+           let r = cleaned.range(of: #"(?i)[,.!?]?\s*\bpress enter\b[.!?]?\s*$"#, options: .regularExpression) {
+            cleaned.removeSubrange(r)
+            cleaned = cleaned.trimmingCharacters(in: .whitespaces)
+            pressEnter = true
+        }
+        Log.write("transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars) pressEnter=\(pressEnter)")
         guard !cleaned.isEmpty else {
+            if pressEnter { injector.pressReturn() }
             state = .idle
+            if pressEnter { hud.flashDone("Sent") }
             return
         }
         if Settings.shared.aiPolishEnabled, ClaudePolish.isConfigured {
             hud.showStatus("Polishing…")
-            ClaudePolish.polish(cleaned) { polished in
-                DispatchQueue.main.async { self.deliver(polished ?? cleaned) }
+            ClaudePolish.polish(cleaned, appName: sessionAppName) { polished in
+                DispatchQueue.main.async { self.deliver(polished ?? cleaned, pressEnter: pressEnter) }
             }
         } else {
-            deliver(cleaned)
+            deliver(cleaned, pressEnter: pressEnter)
         }
     }
 
@@ -224,7 +246,7 @@ final class DictationController {
             ClaudePolish.transform(selection: selection, instruction: instruction, completion: complete)
         } else {
             // AI Edit with nothing selected behaves as Compose.
-            ClaudePolish.compose(instruction, completion: complete)
+            ClaudePolish.compose(instruction, appName: sessionAppName, completion: complete)
         }
     }
 
@@ -243,9 +265,9 @@ final class DictationController {
 
     /// `raw: true` pastes the text exactly as produced (AI output replaces a
     /// selection or lands at the cursor without smart-spacing rewrites).
-    private func deliver(_ text: String, raw: Bool = false) {
+    private func deliver(_ text: String, raw: Bool = false, pressEnter: Bool = false) {
         history.insert(text, at: 0)
-        if history.count > 10 { history.removeLast() }
+        if history.count > 25 { history.removeLast() }
         Settings.shared.historyStore = history
         Settings.shared.totalWordsDictated += text.split(whereSeparator: \.isWhitespace).count
 
@@ -272,7 +294,8 @@ final class DictationController {
         } else {
             injector.insert(text)
         }
+        if pressEnter { injector.pressReturn(after: 0.35) }
         state = .idle
-        hud.flashDone("Inserted")
+        hud.flashDone(pressEnter ? "Sent" : "Inserted")
     }
 }

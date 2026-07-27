@@ -7,9 +7,10 @@ enum ClaudePolish {
 
     /// Grammar/entity polish of a dictated transcript (used by the Dictate
     /// mode when "Polish transcripts" is on).
-    static func polish(_ text: String, completion: @escaping (String?) -> Void) {
+    static func polish(_ text: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
         send(
-            system: "You clean up dictated text. Fix grammar, punctuation, and capitalization. Fix obviously misrecognized product, brand, and vehicle names (e.g. 'Genesis G7' is the 'Genesis G70'). Preserve the speaker's exact meaning, wording style, and tone. Never add content, never summarize, never answer questions in the text. Return only the cleaned text with no preamble.",
+            system: "You clean up dictated text. Fix grammar, punctuation, and capitalization. Fix obviously misrecognized product, brand, and vehicle names (e.g. 'Genesis G7' is the 'Genesis G70'). Preserve the speaker's exact meaning, wording style, and tone. Never add content, never summarize, never answer questions in the text. Return only the cleaned text with no preamble."
+                + appContextLine(appName),
             user: text,
             maxTokens: 2048,
             timeout: 10,
@@ -29,14 +30,22 @@ enum ClaudePolish {
     }
 
     /// AI Compose mode: writes finished text from a spoken request.
-    static func compose(_ instruction: String, completion: @escaping (String?) -> Void) {
+    static func compose(_ instruction: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
         send(
-            system: "You write text on the user's behalf from a spoken request. Return only the finished text, ready to be inserted exactly where they are typing. No preamble, no explanations, no surrounding quotes, no markdown unless the request implies it. Write naturally and concisely in the tone the request implies. Never use em dashes.",
+            system: "You write text on the user's behalf from a spoken request. Return only the finished text, ready to be inserted exactly where they are typing. No preamble, no explanations, no surrounding quotes, no markdown unless the request implies it. Write naturally and concisely in the tone the request implies. Never use em dashes."
+                + appContextLine(appName),
             user: instruction,
             maxTokens: 4096,
             timeout: 25,
             completion: completion
         )
+    }
+
+    /// Light context awareness: the target app shapes tone (a Slack message
+    /// reads differently from a Mail draft) without any screen capture.
+    private static func appContextLine(_ appName: String?) -> String {
+        guard let appName, !appName.isEmpty else { return "" }
+        return " The text will be inserted into the app \"\(appName)\" — match the tone and formatting conventions people use there."
     }
 
     /// True when the current provider can actually take a request.

@@ -97,10 +97,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if words > 0 {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
-            let stats = NSMenuItem(
-                title: "\(formatter.string(from: NSNumber(value: words)) ?? "\(words)") words dictated",
-                action: nil, keyEquivalent: ""
-            )
+            var title = "\(formatter.string(from: NSNumber(value: words)) ?? "\(words)") words dictated"
+            // Speaking beats typing (~40 wpm) — show the difference once it's real.
+            let savedMinutes = Double(words) / 40.0 - Settings.shared.totalSecondsDictated / 60.0
+            if savedMinutes >= 2 {
+                title += savedMinutes >= 90
+                    ? String(format: " · ~%.1f hrs saved", savedMinutes / 60)
+                    : " · ~\(Int(savedMinutes)) min saved"
+            }
+            let stats = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             stats.isEnabled = false
             menu.addItem(stats)
         }
@@ -127,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let historyItem = NSMenuItem(title: "Recent Transcripts", action: nil, keyEquivalent: "")
             let sub = NSMenu()
             sub.autoenablesItems = false
-            for (i, text) in controller.history.enumerated() {
+            for (i, text) in controller.history.prefix(10).enumerated() {
                 let title = text.count > 60 ? String(text.prefix(60)) + "…" : text
                 let item = NSMenuItem(title: title, action: #selector(copyHistoryItem(_:)), keyEquivalent: "")
                 item.target = self

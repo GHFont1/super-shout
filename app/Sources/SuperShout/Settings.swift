@@ -51,6 +51,18 @@ enum HoldKey: String, CaseIterable, Codable {
     }
 }
 
+enum HUDPosition: String, CaseIterable, Codable {
+    case bottomLeft, bottomCenter, bottomRight
+
+    var displayName: String {
+        switch self {
+        case .bottomLeft: return "Bottom left"
+        case .bottomCenter: return "Bottom center"
+        case .bottomRight: return "Bottom right"
+        }
+    }
+}
+
 final class Settings {
     static let shared = Settings()
     private let d = UserDefaults.standard
@@ -111,6 +123,31 @@ final class Settings {
     var smartEntities: Bool {
         get { d.object(forKey: "smartEntities") as? Bool ?? true }
         set { d.set(newValue, forKey: "smartEntities") }
+    }
+
+    /// "New line", "new paragraph", "scratch that" spoken while dictating.
+    var spokenCommands: Bool {
+        get { d.object(forKey: "spokenCommands") as? Bool ?? true }
+        set { d.set(newValue, forKey: "spokenCommands") }
+    }
+
+    /// Soft click when listening starts/stops, so you know it's live without
+    /// looking at the Shout Bar.
+    var soundCues: Bool {
+        get { d.object(forKey: "soundCues") as? Bool ?? true }
+        set { d.set(newValue, forKey: "soundCues") }
+    }
+
+    /// Cumulative seconds spent actually speaking, for the time-saved stat.
+    var totalSecondsDictated: Double {
+        get { d.double(forKey: "totalSecondsDictated") }
+        set { d.set(newValue, forKey: "totalSecondsDictated") }
+    }
+
+    /// Where the Shout Bar sits on screen; it must never cover a Send button.
+    var hudPosition: HUDPosition {
+        get { HUDPosition(rawValue: d.string(forKey: "hudPosition") ?? "") ?? .bottomCenter }
+        set { d.set(newValue.rawValue, forKey: "hudPosition") }
     }
 
     var totalWordsDictated: Int {

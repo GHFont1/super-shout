@@ -44,6 +44,10 @@ enum CleanupEngine {
         text = text.replacingOccurrences(of: #"\s+([,.!?;:])"#, with: "$1", options: .regularExpression)
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        if Settings.shared.spokenCommands {
+            text = SpokenCommands.apply(to: text, allowNewlines: options.allowLists)
+        }
+
         if let first = text.first, first.isLowercase {
             text = first.uppercased() + text.dropFirst()
         }
@@ -67,10 +71,78 @@ enum CleanupEngine {
     /// Adds a period when the utterance ends without terminal punctuation.
     private static func ensureTerminalPunctuation(_ text: String) -> String {
         guard let last = text.last else { return text }
-        let terminals: Set<Character> = [".", "!", "?", ":", ";", ",", "\"", ")", "]", "-", "…"]
+        let terminals: Set<Character> = [".", "!", "?", ":", ";", ",", "\"", ")", "]", "-", "…", "\n"]
         if terminals.contains(last) { return text }
         // Don't punctuate a bare fragment that is clearly a single word command.
         return text + "."
+    }
+}
+
+/// Spoken editing commands, resolved locally: "new line", "new paragraph",
+/// and "scratch that" (drops everything said since the last sentence break).
+enum SpokenCommands {
+
+    static func apply(to input: String, allowNewlines: Bool) -> String {
+        var text = input
+
+        // "Scratch that" erases back to the previous sentence boundary, so a
+        // misspoken sentence can be retaken without releasing the key.
+        let beforeScratch = text
+        text = text.replacingOccurrences(
+            of: #"(?i)(^|[.!?]\s+)(?:[^.!?]*?[,.]?\s*)?\bscratch that\b[,.!?]?\s*"#,
+            with: "$1",
+            options: .regularExpression
+        )
+        let scratched = text != beforeScratch
+
+        if allowNewlines {
+            // "(?!…)" guard: "a new line of products" is a noun phrase, not a
+            // command — leave it alone when a preposition follows.
+            let notNounPhrase = #"(?!\s+(?:of|for|in|to|from|with|that|which|up|on|at)\b)"#
+            text = text.replacingOccurrences(
+                of: #"(?i)[,.]?\s*\bnew paragraph\b"# + notNounPhrase + #"[,.]?\s*"#,
+                with: "\n\n",
+                options: .regularExpression
+            )
+            text = text.replacingOccurrences(
+                of: #"(?i)[,.]?\s*\b(?:new line|newline)\b"# + notNounPhrase + #"[,.]?\s*"#,
+                with: "\n",
+                options: .regularExpression
+            )
+        }
+
+        // Each line the commands created starts a fresh sentence.
+        if text.contains("\n") {
+            text = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { line -> String in
+                    guard let f = line.first, f.isLowercase else { return String(line) }
+                    return f.uppercased() + line.dropFirst()
+                }
+                .joined(separator: "\n")
+        }
+        // "Scratch that" can leave a lowercase word after a sentence break.
+        if scratched { text = capitalizeAfterSentenceEnders(text) }
+        return text.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func capitalizeAfterSentenceEnders(_ text: String) -> String {
+        var out = ""
+        out.reserveCapacity(text.count)
+        var afterEnder = false
+        for ch in text {
+            if afterEnder, ch.isLowercase {
+                out.append(Character(ch.uppercased()))
+                afterEnder = false
+                continue
+            }
+            if ".!?".contains(ch) {
+                afterEnder = true
+            } else if !ch.isWhitespace {
+                afterEnder = false
+            }
+            out.append(ch)
+        }
+        return out
     }
 }
 

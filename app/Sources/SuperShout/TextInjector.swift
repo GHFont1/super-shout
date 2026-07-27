@@ -100,6 +100,19 @@ final class TextInjector {
         }
     }
 
+    /// Presses Return, optionally delayed so a just-issued paste lands first.
+    /// Powers the spoken "press enter" command for chat and terminal apps.
+    func pressReturn(after delay: TimeInterval = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let source = CGEventSource(stateID: .combinedSessionState)
+            let down = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Return), keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Return), keyDown: false)
+            down?.post(tap: .cgSessionEventTap)
+            up?.post(tap: .cgSessionEventTap)
+            Log.write("pressReturn: synthetic Return sent")
+        }
+    }
+
     private func pasteKeystroke() {
         let source = CGEventSource(stateID: .combinedSessionState)
         let vDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
