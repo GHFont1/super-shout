@@ -49,6 +49,25 @@ enum ContextReader {
         focusedTextElement() != nil
     }
 
+    /// True when the focused element can actually receive typed/pasted text.
+    /// Pasting over a read-only selection (web page prose, a PDF, a label)
+    /// silently does nothing — callers should hand the user the result instead.
+    static func focusIsEditable() -> Bool {
+        guard let element = focusedTextElement() else { return false }
+        var settable = DarwinBoolean(false)
+        if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success,
+           settable.boolValue {
+            return true
+        }
+        var roleValue: AnyObject?
+        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue) == .success,
+           let role = roleValue as? String,
+           ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) {
+            return true
+        }
+        return false
+    }
+
     /// True when the focused element is a search field (or a browser's
     /// address-and-search bar). Dictated search queries shouldn't end with a
     /// period — "brakes and rotors." makes for a worse query.

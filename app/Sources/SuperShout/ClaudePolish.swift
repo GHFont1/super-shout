@@ -109,8 +109,9 @@ enum ClaudePolish {
             process.standardOutput = stdout
             process.standardError = stderr
 
+            Log.write("CLI start: \(provider.rawValue) args=\(process.arguments ?? [])")
             do { try process.run() } catch {
-                NSLog("SuperShout: failed to launch \(provider.rawValue) CLI — \(error.localizedDescription)")
+                Log.write("CLI launch failed: \(error.localizedDescription)")
                 completion(nil); return
             }
             stdin.fileHandleForWriting.write(Data(stdinText.utf8))
@@ -132,10 +133,11 @@ enum ClaudePolish {
             let trimmed = result?.trimmingCharacters(in: .whitespacesAndNewlines)
             if process.terminationStatus != 0 || trimmed?.isEmpty != false {
                 let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                NSLog("SuperShout: \(provider.rawValue) CLI failed (status \(process.terminationStatus)) — \(err.suffix(300))")
+                Log.write("CLI failed: status=\(process.terminationStatus) stderr=\(err.suffix(300))")
                 completion(nil)
                 return
             }
+            Log.write("CLI done: \(trimmed?.count ?? 0) chars")
             completion(trimmed)
         }
     }

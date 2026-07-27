@@ -34,6 +34,8 @@ final class DictationController {
     private var handsFreeActive = false
     private var activeAction: KeyAction = .dictate
     private var capturedSelection: String?
+    /// Frontmost app when dictation started — results only auto-paste there.
+    private var sessionApp: String?
 
     var canUndo: Bool { injector.lastInserted != nil }
 
@@ -107,11 +109,13 @@ final class DictationController {
 
         activeAction = action
         capturedSelection = nil
+        sessionApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         if action == .aiEdit {
             // Grab the selection now, while it's still highlighted; dictation
             // runs concurrently with the (possibly async) capture.
             SelectionReader.capture { [weak self] selection in
                 self?.capturedSelection = selection
+                Log.write("selection captured: \(selection?.count ?? 0) chars")
             }
         }
 
@@ -173,7 +177,7 @@ final class DictationController {
 
     private func finishDictation(_ raw: String) {
         let cleaned = CleanupEngine.clean(raw, options: currentCleanOptions())
-        NSLog("SuperShout: transcript=\"\(cleaned)\"")
+        Log.write("transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars)")
         guard !cleaned.isEmpty else {
             state = .idle
             return
@@ -199,12 +203,13 @@ final class DictationController {
             state = .idle
             return
         }
-        NSLog("SuperShout: AI instruction=\"\(instruction)\"")
+        Log.write("AI instruction (\(action.rawValue)): \"\(instruction.prefix(80))\" selection=\(capturedSelection?.count ?? 0) chars")
         hud.showStatus("Asking Claude…")
 
         let complete: (String?) -> Void = { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
+                Log.write("AI result: \(result.map { "\($0.count) chars" } ?? "FAILED")")
                 if let result {
                     self.deliver(result, raw: true)
                 } else {
@@ -243,6 +248,25 @@ final class DictationController {
         if history.count > 10 { history.removeLast() }
         Settings.shared.historyStore = history
         Settings.shared.totalWordsDictated += text.split(whereSeparator: \.isWhitespace).count
+
+        let currentApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let sameApp = sessionApp == nil || currentApp == sessionApp
+        let editable = ContextReader.focusIsEditable()
+        Log.write("deliver: \(text.count) chars raw=\(raw) sameApp=\(sameApp) editable=\(editable) app=\(currentApp ?? "?")")
+
+        // A synthetic paste only lands when the same app is frontmost and the
+        // focus can take text. AI results arrive seconds later — if either
+        // check fails, hand the user the result instead of pasting into the
+        // void and claiming success.
+        if raw && (!sameApp || !editable) {
+            injector.copyOnly(text)
+            state = .idle
+            hud.flashInfo(!sameApp
+                ? "Result copied — press ⌘V where you want it"
+                : "That text isn't editable — result copied, press ⌘V to paste it anywhere")
+            return
+        }
+
         if raw {
             injector.insertRaw(text)
         } else {

@@ -17,9 +17,20 @@ final class TextInjector {
         paste(text)
     }
 
+    /// Puts the text on the clipboard and leaves it there (no restore) for the
+    /// user to paste manually — used when a synthetic paste can't land.
+    func copyOnly(_ text: String) {
+        lastInserted = nil
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        Log.write("copyOnly: \(text.count) chars left on clipboard")
+    }
+
     private func paste(_ text: String) {
         lastInsertionAt = Date()
         lastInserted = text
+        Log.write("paste: \(text.count) chars via synthetic ⌘V")
         let pb = NSPasteboard.general
         let savedItems = pb.pasteboardItems?.compactMap { item -> [NSPasteboard.PasteboardType: Data]? in
             var copy: [NSPasteboard.PasteboardType: Data] = [:]
@@ -32,9 +43,12 @@ final class TextInjector {
         pb.clearContents()
         pb.setString(text, forType: .string)
 
-        pasteKeystroke()
+        // Give the pasteboard server a beat before the target app reads it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            self?.pasteKeystroke()
+        }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             guard !savedItems.isEmpty else { return }
             pb.clearContents()
             let restored = savedItems.map { dict -> NSPasteboardItem in
