@@ -224,6 +224,7 @@ final class DictationController {
             pressEnter = true
         }
         Log.write("transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars) pressEnter=\(pressEnter)")
+        VoiceTutor.record(cleaned)
         guard !cleaned.isEmpty else {
             if pressEnter { injector.pressReturn() }
             state = .idle
@@ -367,6 +368,7 @@ final class DictationController {
         }
         Log.write("rewrite transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars)")
         hud.showStatus("Rewriting in your voice…")
+        VoiceTutor.record(cleaned)
         ClaudePolish.rewrite(cleaned, appName: sessionAppName, engine: activeEngine) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }

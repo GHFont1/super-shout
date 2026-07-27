@@ -64,6 +64,9 @@ struct SettingsView: View {
     @State private var aiPolish = Settings.shared.aiPolishEnabled
     @State private var personalStyle = Settings.shared.personalStyle
     @State private var businessContext = Settings.shared.businessContext
+    @State private var voiceTutor = Settings.shared.voiceTutorEnabled
+    @State private var tutorRunning = false
+    @State private var tutorSummary = Settings.shared.tutorLastSummary
     @State private var apiKey = Settings.shared.anthropicAPIKey
     @State private var model = Settings.shared.polishModel
     @State private var provider = Settings.shared.aiProvider
@@ -161,6 +164,24 @@ struct SettingsView: View {
                             .map { $0.trimmingCharacters(in: .whitespaces) }
                             .filter { !$0.isEmpty }
                     }
+                Toggle("Voice Tutor: learn from my dictation automatically", isOn: $voiceTutor)
+                    .onChange(of: voiceTutor) { Settings.shared.voiceTutorEnabled = voiceTutor }
+                HStack {
+                    Button(tutorRunning ? "Studying…" : "Study now") {
+                        tutorRunning = true
+                        VoiceTutor.run { summary in
+                            tutorRunning = false
+                            tutorSummary = summary
+                        }
+                    }
+                    .disabled(tutorRunning)
+                    if !tutorSummary.isEmpty {
+                        Text(tutorSummary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
+                Text("Every few hours an AI pass reviews recent transcripts and fixes what the recognizer keeps getting wrong (\"Taylor for our business\" becomes \"tailored for our business\" forever). Uses your AI engine; add or remove anything it learns in the dictionary below.")
+                    .font(.caption).foregroundStyle(.secondary)
+
                 Button("Restore default vocabulary") {
                     Settings.shared.vocabulary = Settings.defaultVocabulary
                     vocabText = Settings.defaultVocabulary.joined(separator: "\n")

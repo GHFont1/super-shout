@@ -89,6 +89,17 @@ enum ClaudePolish {
 
     static var isDeepAvailable: Bool { cliPath("claude") != nil }
 
+    /// Voice Tutor analysis: JSON-only study of recent transcripts. Sonnet-tier
+    /// quality via whatever auth route is available.
+    static func tutorAnalyze(system: String, transcripts: String, completion: @escaping (String?) -> Void) {
+        send(system: system,
+             user: "RECENT TRANSCRIPTS (newest last):\n" + transcripts,
+             maxTokens: 2048,
+             timeout: 90,
+             engine: .apiSonnet,
+             completion: completion)
+    }
+
     /// AI Ask mode: answers a spoken question in the chat window. The
     /// transcript carries the whole conversation so follow-ups have context.
     /// With the Claude Code provider it may use tools (web search, local

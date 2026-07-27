@@ -270,6 +270,23 @@ final class Settings {
         set { d.set(newValue.rawValue, forKey: "hudPosition") }
     }
 
+    /// Background learning agent: studies transcripts and teaches the
+    /// dictionary/vocabulary automatically.
+    var voiceTutorEnabled: Bool {
+        get { d.object(forKey: "voiceTutorEnabled") as? Bool ?? true }
+        set { d.set(newValue, forKey: "voiceTutorEnabled") }
+    }
+
+    var tutorLastRunAt: Date {
+        get { d.object(forKey: "tutorLastRunAt") as? Date ?? .distantPast }
+        set { d.set(newValue, forKey: "tutorLastRunAt") }
+    }
+
+    var tutorLastSummary: String {
+        get { d.string(forKey: "tutorLastSummary") ?? "" }
+        set { d.set(newValue, forKey: "tutorLastSummary") }
+    }
+
     var totalWordsDictated: Int {
         get { d.integer(forKey: "totalWordsDictated") }
         set { d.set(newValue, forKey: "totalWordsDictated") }

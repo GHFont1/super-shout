@@ -34,7 +34,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { _ in
             UpdateChecker.check()
         }
+
+        // Voice Tutor studies recent dictation in the background (≤ every 6 h).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 120) { VoiceTutor.runIfDue() }
+        tutorTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { _ in
+            VoiceTutor.runIfDue()
+        }
     }
+
+    private var tutorTimer: Timer?
 
     private var updateTimer: Timer?
 
