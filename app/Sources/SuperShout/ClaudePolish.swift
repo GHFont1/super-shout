@@ -39,8 +39,109 @@ enum ClaudePolish {
         )
     }
 
+    /// True when the current provider can actually take a request.
+    static var isConfigured: Bool {
+        switch Settings.shared.aiProvider {
+        case .claudeAPI: return !Settings.shared.anthropicAPIKey.isEmpty
+        case .claudeCode: return cliPath("claude") != nil
+        case .codexCLI: return cliPath("codex") != nil
+        }
+    }
+
     private static func send(system: String, user: String, maxTokens: Int, timeout: TimeInterval,
                              completion: @escaping (String?) -> Void) {
+        switch Settings.shared.aiProvider {
+        case .claudeAPI:
+            sendAPI(system: system, user: user, maxTokens: maxTokens, timeout: timeout, completion: completion)
+        case .claudeCode, .codexCLI:
+            runCLI(system: system, user: user, completion: completion)
+        }
+    }
+
+    // MARK: - CLI providers (reuse the plan sign-ins already on this Mac)
+
+    private static let cliSearchPaths = [
+        NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"
+    ]
+
+    private static func cliPath(_ name: String) -> String? {
+        for dir in cliSearchPaths {
+            let path = dir + "/" + name
+            if FileManager.default.isExecutableFile(atPath: path) { return path }
+        }
+        return nil
+    }
+
+    private static func runCLI(system: String, user: String, completion: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let provider = Settings.shared.aiProvider
+            let outFile = FileManager.default.temporaryDirectory
+                .appendingPathComponent("supershout-\(UUID().uuidString).txt")
+            let process = Process()
+            var stdinText: String
+            switch provider {
+            case .claudeCode:
+                guard let bin = cliPath("claude") else { completion(nil); return }
+                process.executableURL = URL(fileURLWithPath: bin)
+                var args = ["-p", "--system-prompt", system]
+                let model = Settings.shared.claudeCodeModel
+                if !model.isEmpty { args += ["--model", model] }
+                process.arguments = args
+                stdinText = user
+            case .codexCLI:
+                guard let bin = cliPath("codex") else { completion(nil); return }
+                process.executableURL = URL(fileURLWithPath: bin)
+                var args = ["exec", "--skip-git-repo-check", "-o", outFile.path]
+                let model = Settings.shared.codexModel
+                if !model.isEmpty { args += ["-m", model] }
+                process.arguments = args
+                stdinText = system + "\n\n" + user
+            case .claudeAPI:
+                completion(nil); return
+            }
+
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = (env["PATH"].map { $0 + ":" } ?? "") + cliSearchPaths.joined(separator: ":")
+            process.environment = env
+
+            let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
+            process.standardInput = stdin
+            process.standardOutput = stdout
+            process.standardError = stderr
+
+            do { try process.run() } catch {
+                NSLog("SuperShout: failed to launch \(provider.rawValue) CLI — \(error.localizedDescription)")
+                completion(nil); return
+            }
+            stdin.fileHandleForWriting.write(Data(stdinText.utf8))
+            stdin.fileHandleForWriting.closeFile()
+
+            let killer = DispatchWorkItem { if process.isRunning { process.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 90, execute: killer)
+            let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            killer.cancel()
+
+            var result: String?
+            if provider == .codexCLI {
+                result = try? String(contentsOf: outFile, encoding: .utf8)
+                try? FileManager.default.removeItem(at: outFile)
+            } else {
+                result = String(data: outData, encoding: .utf8)
+            }
+            let trimmed = result?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if process.terminationStatus != 0 || trimmed?.isEmpty != false {
+                let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                NSLog("SuperShout: \(provider.rawValue) CLI failed (status \(process.terminationStatus)) — \(err.suffix(300))")
+                completion(nil)
+                return
+            }
+            completion(trimmed)
+        }
+    }
+
+    private static func sendAPI(system: String, user: String, maxTokens: Int, timeout: TimeInterval,
+                                completion: @escaping (String?) -> Void) {
         let key = Settings.shared.anthropicAPIKey
         guard !key.isEmpty, let url = URL(string: "https://api.anthropic.com/v1/messages") else {
             completion(nil)

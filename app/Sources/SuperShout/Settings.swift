@@ -1,5 +1,20 @@
 import Foundation
 
+/// Where AI requests go. The CLI providers reuse the plans already signed in
+/// on this Mac (Claude Code → Claude subscription, Codex → ChatGPT plan) — no
+/// API key involved.
+enum AIProvider: String, CaseIterable, Codable {
+    case claudeAPI, claudeCode, codexCLI
+
+    var displayName: String {
+        switch self {
+        case .claudeAPI: return "Claude API key"
+        case .claudeCode: return "Claude Code (your Claude plan)"
+        case .codexCLI: return "Codex (your ChatGPT plan)"
+        }
+    }
+}
+
 /// What holding a given key does.
 enum KeyAction: String, CaseIterable, Codable {
     case dictate, aiEdit, aiCompose, off
@@ -130,6 +145,23 @@ final class Settings {
     var polishModel: String {
         get { d.string(forKey: "polishModel") ?? "claude-opus-5" }
         set { d.set(newValue, forKey: "polishModel") }
+    }
+
+    var aiProvider: AIProvider {
+        get { AIProvider(rawValue: d.string(forKey: "aiProvider") ?? "") ?? .claudeAPI }
+        set { d.set(newValue.rawValue, forKey: "aiProvider") }
+    }
+
+    /// Model override for the Claude Code CLI; empty = its default.
+    var claudeCodeModel: String {
+        get { d.string(forKey: "claudeCodeModel") ?? "" }
+        set { d.set(newValue, forKey: "claudeCodeModel") }
+    }
+
+    /// Model for the Codex CLI; empty = its default.
+    var codexModel: String {
+        get { d.string(forKey: "codexModel") ?? "gpt-5.6-sol" }
+        set { d.set(newValue, forKey: "codexModel") }
     }
 
     var language: String {

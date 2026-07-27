@@ -15,6 +15,9 @@ struct SettingsView: View {
     @State private var aiPolish = Settings.shared.aiPolishEnabled
     @State private var apiKey = Settings.shared.anthropicAPIKey
     @State private var model = Settings.shared.polishModel
+    @State private var provider = Settings.shared.aiProvider
+    @State private var claudeCodeModel = Settings.shared.claudeCodeModel
+    @State private var codexModel = Settings.shared.codexModel
     @State private var dictEntries: [(String, String)] = Settings.shared.dictionary.sorted { $0.key < $1.key }
     @State private var vocabText = Settings.shared.vocabulary.joined(separator: "\n")
     @State private var newSpoken = ""
@@ -133,18 +136,48 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Claude AI (powers AI Edit, AI Compose, and polish)") {
-                SecureField("Anthropic API key", text: $apiKey)
-                    .onChange(of: apiKey) { Settings.shared.anthropicAPIKey = apiKey }
-                Picker("Model", selection: $model) {
-                    Text("Claude Opus 5 (best)").tag("claude-opus-5")
-                    Text("Claude Sonnet 5").tag("claude-sonnet-5")
-                    Text("Claude Haiku 4.5 (fastest)").tag("claude-haiku-4-5")
+            Section("AI provider (powers AI Edit, AI Compose, and polish)") {
+                Picker("Provider", selection: $provider) {
+                    ForEach(AIProvider.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
-                .onChange(of: model) { Settings.shared.polishModel = model }
-                Toggle("Also polish plain dictation with Claude", isOn: $aiPolish)
+                .onChange(of: provider) { Settings.shared.aiProvider = provider }
+
+                switch provider {
+                case .claudeAPI:
+                    SecureField("Anthropic API key", text: $apiKey)
+                        .onChange(of: apiKey) { Settings.shared.anthropicAPIKey = apiKey }
+                    Picker("Model", selection: $model) {
+                        Text("Claude Fable 5 (smartest)").tag("claude-fable-5")
+                        Text("Claude Opus 5").tag("claude-opus-5")
+                        Text("Claude Sonnet 5").tag("claude-sonnet-5")
+                        Text("Claude Haiku 4.5 (fastest)").tag("claude-haiku-4-5")
+                    }
+                    .onChange(of: model) { Settings.shared.polishModel = model }
+                    Text("The key is stored in your Keychain.")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .claudeCode:
+                    Picker("Model", selection: $claudeCodeModel) {
+                        Text("Default (session model)").tag("")
+                        Text("Fable 5").tag("claude-fable-5")
+                        Text("Opus").tag("opus")
+                        Text("Sonnet").tag("sonnet")
+                    }
+                    .onChange(of: claudeCodeModel) { Settings.shared.claudeCodeModel = claudeCodeModel }
+                    Text("Uses the Claude Code CLI and the Claude plan you're already signed into on this Mac. No API key, no extra cost.")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .codexCLI:
+                    Picker("Model", selection: $codexModel) {
+                        Text("GPT-5.6-SOL").tag("gpt-5.6-sol")
+                        Text("Default").tag("")
+                    }
+                    .onChange(of: codexModel) { Settings.shared.codexModel = codexModel }
+                    Text("Uses the Codex CLI and the ChatGPT plan you're already signed into on this Mac. No API key, no extra cost.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Toggle("Also polish plain dictation with AI", isOn: $aiPolish)
                     .onChange(of: aiPolish) { Settings.shared.aiPolishEnabled = aiPolish }
-                Text("The key is stored in your Keychain. Without a key, dictation works fully on-device and nothing ever leaves this Mac; AI Edit and AI Compose need the key.")
+                Text("Without a provider set up, dictation works fully on-device and nothing ever leaves this Mac.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

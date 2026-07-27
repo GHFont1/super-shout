@@ -68,8 +68,8 @@ final class DictationController {
     private func handlePress(_ key: HoldKey, handsFree: Bool) {
         let action = Settings.shared.action(for: key)
         guard action != .off else { return }
-        if action.needsAPIKey && Settings.shared.anthropicAPIKey.isEmpty {
-            hud.flashError("Add your Anthropic API key in Settings to use AI modes")
+        if action.needsAPIKey && !ClaudePolish.isConfigured {
+            hud.flashError("Set up an AI provider in Settings to use AI modes")
             return
         }
         beginListening(action: action, handsFree: handsFree)
@@ -173,7 +173,7 @@ final class DictationController {
             state = .idle
             return
         }
-        if Settings.shared.aiPolishEnabled, !Settings.shared.anthropicAPIKey.isEmpty {
+        if Settings.shared.aiPolishEnabled, ClaudePolish.isConfigured {
             hud.showStatus("Polishing…")
             ClaudePolish.polish(cleaned) { polished in
                 DispatchQueue.main.async { self.deliver(polished ?? cleaned) }
