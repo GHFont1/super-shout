@@ -105,29 +105,25 @@ final class Settings {
 
     static let defaultPersonalStyle = """
         Short, direct, confident sentences. Plain everyday words, no corporate jargon, no hype. \
-        Never use em dashes or exclamation points. Friendly but efficient — get to the point, \
-        then stop. For emails: brief greeting, tight paragraphs, sign off simply as Benny.
+        Never use em dashes. Friendly but efficient — get to the point, then stop. \
+        For emails: brief greeting, tight paragraphs, simple sign-off.
         """
 
     /// Facts about the speaker's business that ride along with every AI
     /// request, so "email Classic about the PO" needs no explanation.
+    /// Empty by default — each install describes its own world. Nothing about
+    /// any particular user or company ships in the binary.
     var businessContext: String {
-        get {
-            let stored = d.string(forKey: "businessContext") ?? ""
-            return stored.isEmpty ? Settings.defaultBusinessContext : stored
-        }
+        get { d.string(forKey: "businessContext") ?? "" }
         set { d.set(newValue, forKey: "businessContext") }
     }
 
+    /// Example shown by the "Insert example" button, never active by itself.
     static let defaultBusinessContext = """
-        The speaker is Benny Scalzo, owner of Great Call Athletics (GCA), a sporting goods \
-        retailer (greatcallathletics.com) selling on Amazon, eBay, Walmart, Shopify, Temu, and \
-        TikTok Shop, plus a physical store. Key distributors: Classic Products (bowling; IN/FL/NV/TX \
-        warehouses), Ace Mitchell (bowling; TN/OH/NY), HEAD, Wilson, Cliff Keen, ScrapLife, Smitty, \
-        Matman, Diamond, Longstreth. Vendor operational emails come from orders@greatcallathletics.com \
-        and are signed "Great Call Athletics". "PO" means purchase order. Never reveal to a vendor \
-        which other distributor an order was rerouted to, internal costs, or inventory sources. \
-        Common terms: UPC, ASIN, SKU, FBA, FBM, FNSKU, Duoplane (order routing), Seller Central.
+        The speaker is [your name], [role] at [company], a [what the company does]. \
+        Key partners/vendors: [names]. Emails come from [address] and are signed "[signature]". \
+        Terms the AI should know: [your acronyms and product names]. \
+        Rules: [anything the AI must always or never do].
         """
 
     /// The key currently assigned to plain dictation, for UI copy.
@@ -267,10 +263,9 @@ final class Settings {
     }
 
     static let defaultVocabulary = [
-        "UPC", "ASIN", "SKU", "GTIN", "EAN", "FBA", "FNSKU", "MPN", "MAP",
-        "Amazon", "Shopify", "eBay", "Walmart", "Temu", "TikTok Shop", "Duoplane",
-        "Great Call Athletics", "GCA", "Seller Central", "Notion", "Xero",
-        "purchase order", "PO", "vendor SKU", "retailer SKU", "inventory feed"
+        "UPC", "ASIN", "SKU", "GTIN", "EAN", "FBA", "FNSKU", "MPN",
+        "Amazon", "Shopify", "eBay", "Walmart", "Seller Central",
+        "purchase order", "PO", "vendor SKU", "inventory feed"
     ]
 
     /// Everything worth hinting to the recognizer: vocabulary plus both sides of

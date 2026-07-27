@@ -230,7 +230,7 @@ struct SettingsView: View {
                     .font(.system(size: 12))
                     .frame(height: 120)
                     .onChange(of: businessContext) { Settings.shared.businessContext = businessContext }
-                Button("Restore default business context") {
+                Button("Insert example template") {
                     Settings.shared.businessContext = Settings.defaultBusinessContext
                     businessContext = Settings.defaultBusinessContext
                 }
