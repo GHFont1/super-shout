@@ -4,11 +4,12 @@ import Speech
 /// Streams microphone audio into SFSpeechRecognizer (on-device when available)
 /// and reports live audio levels for the HUD waveform.
 ///
-/// SFSpeechRecognizer stops delivering results after roughly a minute, so a
-/// fresh recognition task takes over every 45 s while the audio engine keeps
-/// running. Each task writes into its own generation slot and is allowed to
-/// finalize naturally after handoff — no cancel race, no words lost at the
-/// seam, no length limit.
+/// Continuity is the prime directive: speech must never be lost. Apple's
+/// recognizer stops after ~1 minute and also self-finalizes during pauses, so
+/// each recognition task writes into its own generation slot; whenever the
+/// current task ends for any reason mid-dictation (rotation, pause
+/// finalization, error, audio-route change), a fresh task takes over and the
+/// finished segment is kept. Segments only ever accumulate.
 final class Transcriber: NSObject {
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
@@ -29,11 +30,20 @@ final class Transcriber: NSObject {
     private var finishCompletion: ((String) -> Void)?
     private var fallbackWorkItem: DispatchWorkItem?
 
+    /// Restart pacing: retries are throttled, never abandoned.
+    private var lastRestartAt: Date?
+    private var pendingRestart: DispatchWorkItem?
+    /// True while a throttled restart is queued — the current task is already
+    /// done, so a finish() during this window can complete immediately.
+    private var awaitingRestart = false
+
     func begin() throws {
         segments = [:]
         generation = 0
         retiredTasks = []
         finishing = false
+        lastRestartAt = nil
+        awaitingRestart = false
         let locale = Locale(identifier: Settings.shared.language)
         recognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer, recognizer.isAvailable else {
@@ -42,23 +52,39 @@ final class Transcriber: NSObject {
         }
 
         startRecognitionTask()
+        installTap()
+        engine.prepare()
+        try engine.start()
 
+        // AirPods connecting, mic switching, etc. stop the engine mid-dictation.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(audioConfigurationChanged),
+            name: .AVAudioEngineConfigurationChange, object: engine
+        )
+
+        // .common mode so rotation still fires while a menu is open or the
+        // mouse is dragging — default-mode timers stall during event tracking.
+        let timer = Timer(timeInterval: 45, repeats: true) { [weak self] _ in
+            self?.rotateRecognitionTask()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        rotationTimer = timer
+    }
+
+    private func installTap() {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.request?.append(buffer)
             self?.reportLevel(buffer)
         }
-        engine.prepare()
-        try engine.start()
-
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
-            self?.rotateRecognitionTask()
-        }
     }
 
     private func startRecognitionTask() {
         guard let recognizer else { return }
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        awaitingRestart = false
         generation += 1
         let gen = generation
         segments[gen] = ""
@@ -78,9 +104,7 @@ final class Transcriber: NSObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 if let result {
-                    let text = result.bestTranscription.formattedString
-                    if !text.isEmpty { self.autoRestartCount = 0 }
-                    self.segments[gen] = text
+                    self.segments[gen] = result.bestTranscription.formattedString
                     self.onPartial?(self.assembledTranscript())
                     if result.isFinal {
                         self.reapRetiredTasks()
@@ -98,7 +122,7 @@ final class Transcriber: NSObject {
                     self.reapRetiredTasks()
                     if self.finishing {
                         if gen == self.generation { self.completeFinish() }
-                    } else if gen == self.generation, self.engine.isRunning {
+                    } else if gen == self.generation {
                         NSLog("SuperShout: recognition error mid-dictation (gen \(gen)) — restarting")
                         self.restartMidDictation()
                     }
@@ -107,16 +131,26 @@ final class Transcriber: NSObject {
         }
     }
 
-    /// Restart guard so a persistently failing recognizer can't spin.
-    private var autoRestartCount = 0
-
+    /// Always keeps a live recognition task while dictating. Rapid successive
+    /// restarts (e.g. repeated silence finalizations) are throttled to one per
+    /// 0.5 s, but never abandoned — giving up would lose whatever is said next.
     private func restartMidDictation() {
-        autoRestartCount += 1
-        guard autoRestartCount <= 8 else {
-            NSLog("SuperShout: too many recognizer restarts — giving up until finish")
+        guard !finishing else { return }
+        let now = Date()
+        let rapid = lastRestartAt.map { now.timeIntervalSince($0) < 0.4 } ?? false
+        lastRestartAt = now
+        if !rapid {
+            startRecognitionTask()
             return
         }
-        startRecognitionTask()
+        awaitingRestart = true
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.finishing else { return }
+            self.startRecognitionTask()
+        }
+        pendingRestart?.cancel()
+        pendingRestart = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
     }
 
     /// Hands the audio stream to a fresh recognition task before the current
@@ -133,6 +167,25 @@ final class Transcriber: NSObject {
         NSLog("SuperShout: rotated recognition task (generation \(generation))")
     }
 
+    /// The audio engine stops when the input device changes (AirPods connect,
+    /// mic unplugged). Reconnect immediately: retire the current task, retap
+    /// the input at its new format, and keep going.
+    @objc private func audioConfigurationChanged(_ note: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.finishing else { return }
+            NSLog("SuperShout: audio configuration changed — reconnecting input")
+            self.request?.endAudio()
+            if let outgoing = self.task { self.retiredTasks.append(outgoing) }
+            self.engine.inputNode.removeTap(onBus: 0)
+            self.startRecognitionTask()
+            self.installTap()
+            if !self.engine.isRunning {
+                self.engine.prepare()
+                try? self.engine.start()
+            }
+        }
+    }
+
     private func reapRetiredTasks() {
         retiredTasks.removeAll { $0.state == .completed || $0.state == .canceling }
     }
@@ -145,19 +198,28 @@ final class Transcriber: NSObject {
     }
 
     /// Stops capture and completes as soon as the recognizer's final result
-    /// lands (usually well under the 0.9 s fallback window).
+    /// lands (usually well under the fallback window).
     func finish(completion: @escaping (String) -> Void) {
         rotationTimer?.invalidate()
         rotationTimer = nil
+        pendingRestart?.cancel()
+        pendingRestart = nil
         finishing = true
         finishCompletion = completion
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         request?.endAudio()
 
+        if awaitingRestart {
+            // The current task already delivered its final result while a
+            // restart was queued — every segment is sealed; nothing to wait on.
+            completeFinish()
+            return
+        }
+
         let fallback = DispatchWorkItem { [weak self] in self?.completeFinish() }
         fallbackWorkItem = fallback
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: fallback)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: fallback)
     }
 
     private func completeFinish() {
@@ -166,6 +228,7 @@ final class Transcriber: NSObject {
             self.finishCompletion = nil
             self.fallbackWorkItem?.cancel()
             self.fallbackWorkItem = nil
+            NotificationCenter.default.removeObserver(self)
             self.task?.cancel()
             self.task = nil
             self.request = nil
@@ -178,10 +241,13 @@ final class Transcriber: NSObject {
     func cancel() {
         rotationTimer?.invalidate()
         rotationTimer = nil
+        pendingRestart?.cancel()
+        pendingRestart = nil
         finishing = true
         finishCompletion = nil
         fallbackWorkItem?.cancel()
         fallbackWorkItem = nil
+        NotificationCenter.default.removeObserver(self)
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         request?.endAudio()

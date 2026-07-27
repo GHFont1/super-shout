@@ -71,6 +71,17 @@ final class DictationController {
             if !handsFree { return }  // already listening via press; ignore
             return
         }
+        if case .processing = state {
+            // Previous dictation is still wrapping up. If the user is already
+            // holding the key (or toggled hands-free), start the moment we're
+            // idle instead of silently dropping their first words.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self else { return }
+                let stillWanted = handsFree ? self.handsFreeActive : self.hotkey.keyCurrentlyDown
+                if stillWanted { self.beginListening(handsFree: handsFree) }
+            }
+            return
+        }
         guard case .idle = state else { return }
 
         let t = Transcriber()

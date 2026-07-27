@@ -16,6 +16,9 @@ final class HotkeyManager {
     private var keyIsDown = false
     private var pressStartedAt: Date?
 
+    /// Whether the hold key is physically down right now.
+    var keyCurrentlyDown: Bool { keyIsDown }
+
     private var retryTimer: Timer?
 
     func start() {
