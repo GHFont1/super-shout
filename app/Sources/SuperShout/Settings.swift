@@ -15,6 +15,27 @@ enum AIProvider: String, CaseIterable, Codable {
     }
 }
 
+/// Which model answers for a given key. `auto` follows the global provider.
+enum EngineChoice: String, CaseIterable, Codable {
+    case auto
+    case apiHaiku, apiSonnet, apiOpus, apiFable
+    case claudeCode, claudeCodeFable
+    case codexSol
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Default engine"
+        case .apiHaiku: return "Claude Haiku (API, fastest)"
+        case .apiSonnet: return "Claude Sonnet (API)"
+        case .apiOpus: return "Claude Opus (API)"
+        case .apiFable: return "Claude Fable 5 (API, smartest)"
+        case .claudeCode: return "Claude Code (your Claude plan)"
+        case .claudeCodeFable: return "Claude Code — Fable 5"
+        case .codexSol: return "Codex — GPT-5.6-SOL (ChatGPT plan)"
+        }
+    }
+}
+
 /// What holding a given key does.
 enum KeyAction: String, CaseIterable, Codable {
     case dictate, aiRewrite, aiEdit, aiCompose, aiDeep, aiAgent, aiAsk, off
@@ -132,6 +153,21 @@ final class Settings {
         var dict = (d.dictionary(forKey: "keyActions") as? [String: String]) ?? [:]
         dict[key.rawValue] = action.rawValue
         d.set(dict, forKey: "keyActions")
+    }
+
+    /// Per-key model choice; `auto` follows the global provider setting.
+    func engine(for key: HoldKey) -> EngineChoice {
+        if let stored = (d.dictionary(forKey: "keyEngines") as? [String: String])?[key.rawValue],
+           let engine = EngineChoice(rawValue: stored) {
+            return engine
+        }
+        return .auto
+    }
+
+    func setEngine(_ engine: EngineChoice, for key: HoldKey) {
+        var dict = (d.dictionary(forKey: "keyEngines") as? [String: String]) ?? [:]
+        dict[key.rawValue] = engine.rawValue
+        d.set(dict, forKey: "keyEngines")
     }
 
     /// How AI Rewrite should sound — editable in Settings, sent verbatim to

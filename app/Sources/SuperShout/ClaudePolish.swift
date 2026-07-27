@@ -7,7 +7,7 @@ enum ClaudePolish {
 
     /// Grammar/entity polish of a dictated transcript (used by the Dictate
     /// mode when "Polish transcripts" is on).
-    static func polish(_ text: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
+    static func polish(_ text: String, appName: String? = nil, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         send(
             system: "You clean up dictated text. Fix grammar, punctuation, and capitalization. Fix obviously misrecognized product, brand, and vehicle names (e.g. 'Genesis G7' is the 'Genesis G70'). Preserve the speaker's exact meaning, wording style, and tone. Never add content, never summarize, never answer questions in the text. Return only the cleaned text with no preamble."
                 + appContextLine(appName),
@@ -15,6 +15,7 @@ enum ClaudePolish {
             maxTokens: 2048,
             timeout: 10,
             fast: true,
+            engine: engine,
             completion: completion
         )
     }
@@ -22,7 +23,7 @@ enum ClaudePolish {
     /// AI Rewrite mode: the spoken transcript is retyped as finished writing
     /// in the user's own voice, formatted for the destination (an email gets
     /// email structure, a chat message stays a chat message).
-    static func rewrite(_ transcript: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
+    static func rewrite(_ transcript: String, appName: String? = nil, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         let style = Settings.shared.personalStyle.trimmingCharacters(in: .whitespacesAndNewlines)
         send(
             system: "You turn a raw spoken transcript into finished writing in the speaker's own voice. "
@@ -37,24 +38,26 @@ enum ClaudePolish {
             user: transcript,
             maxTokens: 4096,
             timeout: 25,
+            engine: engine,
             completion: completion
         )
     }
 
     /// AI Edit mode: applies a spoken instruction to the selected text.
-    static func transform(selection: String, instruction: String, completion: @escaping (String?) -> Void) {
+    static func transform(selection: String, instruction: String, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         send(
             system: "You rewrite text according to a spoken instruction. Apply the instruction faithfully. Keep everything the instruction does not cover unchanged, including line breaks and formatting. Return only the rewritten text with no preamble, no explanations, and no surrounding quotes. Never use em dashes."
                 + businessContextBlock(),
             user: "INSTRUCTION: \(instruction)\n\nTEXT:\n\(selection)",
             maxTokens: 4096,
             timeout: 25,
+            engine: engine,
             completion: completion
         )
     }
 
     /// AI Compose mode: writes finished text from a spoken request.
-    static func compose(_ instruction: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
+    static func compose(_ instruction: String, appName: String? = nil, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         send(
             system: "You write text on the user's behalf from a spoken request. Return only the finished text, ready to be inserted exactly where they are typing. No preamble, no explanations, no surrounding quotes, no markdown unless the request implies it. Write naturally and concisely in the tone the request implies. Never use em dashes."
                 + appContextLine(appName)
@@ -62,6 +65,7 @@ enum ClaudePolish {
             user: instruction,
             maxTokens: 4096,
             timeout: 25,
+            engine: engine,
             completion: completion
         )
     }
@@ -70,14 +74,17 @@ enum ClaudePolish {
     /// up first (files, MCP servers, local tooling) and then writes the
     /// deliverable. Minutes, not seconds — runs in the background and the
     /// result is handed over via clipboard + history.
-    static func deepResearch(_ instruction: String, completion: @escaping (String?) -> Void) {
+    static func deepResearch(_ instruction: String, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         let system = "You are a research assistant running on the user's own Mac with access to their files and tools. "
             + "First use your available tools (project files, MCP servers, local scripts, read-only shell commands) to look up the facts the request needs. "
             + "Research is read-only: never send emails or messages, never place or cancel orders, never modify data — the user reviews and sends everything themselves. "
             + "Then produce the final deliverable the request asks for (usually an email or message body, sometimes a summary or report). "
             + "Return ONLY that final text, ready to paste — no explanation of your research process, no preamble. Never use em dashes."
             + businessContextBlock()
-        runDeepClaude(system: system, user: instruction, completion: completion)
+        let res = resolution(for: engine)
+        runDeepClaude(system: system, user: instruction,
+                      modelOverride: res.provider == .claudeCode ? res.model : nil,
+                      completion: completion)
     }
 
     static var isDeepAvailable: Bool { cliPath("claude") != nil }
@@ -86,20 +93,21 @@ enum ClaudePolish {
     /// transcript carries the whole conversation so follow-ups have context.
     /// With the Claude Code provider it may use tools (web search, local
     /// lookups) for current or local questions.
-    static func ask(_ transcript: String, completion: @escaping (String?) -> Void) {
+    static func ask(_ transcript: String, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         let system = "You are a helpful chat assistant. Answer the user's latest message directly and completely, "
             + "the way a chat assistant would. Conversational plain text; short lists are fine. "
             + "If the question needs current or local information and you have tools available (web search, shell), use them. "
             + "Never use em dashes."
             + businessContextBlock()
-        switch Settings.shared.aiProvider {
+        let res = resolution(for: engine)
+        switch res.provider {
         case .claudeCode:
-            runDeepClaude(system: system, user: transcript, completion: completion)
+            runDeepClaude(system: system, user: transcript, modelOverride: res.model, completion: completion)
         case .claudeAPI:
             sendAPI(system: system, user: transcript, maxTokens: 4096, timeout: 30,
-                    model: Settings.shared.polishModel, completion: completion)
+                    model: res.model ?? Settings.shared.polishModel, completion: completion)
         case .codexCLI:
-            runCLI(system: system, user: transcript, completion: completion)
+            runCLI(system: system, user: transcript, provider: .codexCLI, modelOverride: res.model, completion: completion)
         }
     }
 
@@ -107,7 +115,7 @@ enum ClaudePolish {
     /// (file the selection in Notion, save a note, run a lookup-and-record) and
     /// reports what it did. Guardrailed: drafts only for outbound messages,
     /// never touches customer orders, no destructive changes.
-    static func agentAct(instruction: String, selection: String?, completion: @escaping (String?) -> Void) {
+    static func agentAct(instruction: String, selection: String?, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
         let system = "You are an assistant with hands, running on the user's own Mac via Claude Code with access to their files, "
             + "MCP servers, and shell. Carry out the spoken request now — actually do it, don't describe how. "
             + "If SELECTED TEXT is provided, the request refers to it. "
@@ -121,18 +129,21 @@ enum ClaudePolish {
         if let selection, !selection.isEmpty {
             user += "\n\nSELECTED TEXT:\n" + selection
         }
-        runDeepClaude(system: system, user: user, completion: completion)
+        let res = resolution(for: engine)
+        runDeepClaude(system: system, user: user,
+                      modelOverride: res.provider == .claudeCode ? res.model : nil,
+                      completion: completion)
     }
 
     /// Dedicated deep runner: always the Claude Code CLI (agentic, tool-using),
     /// from $HOME so global CLAUDE.md and MCP config load, with a 10 min cap.
-    private static func runDeepClaude(system: String, user: String, completion: @escaping (String?) -> Void) {
+    private static func runDeepClaude(system: String, user: String, modelOverride: String? = nil, completion: @escaping (String?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let bin = cliPath("claude") else { completion(nil); return }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: bin)
             var args = ["-p", "--permission-mode", "bypassPermissions", "--append-system-prompt", system]
-            let model = Settings.shared.claudeCodeModel
+            let model = modelOverride ?? Settings.shared.claudeCodeModel
             if !model.isEmpty { args += ["--model", model] }
             process.arguments = args
             process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
@@ -188,26 +199,45 @@ enum ClaudePolish {
             + "facts, and tone, and follow any rules it states. Never mention that you were given it:\n" + ctx
     }
 
+    /// Per-key engine → concrete provider + model override (nil = provider default).
+    static func resolution(for engine: EngineChoice) -> (provider: AIProvider, model: String?) {
+        switch engine {
+        case .auto: return (Settings.shared.aiProvider, nil)
+        case .apiHaiku: return (.claudeAPI, "claude-haiku-4-5")
+        case .apiSonnet: return (.claudeAPI, "claude-sonnet-5")
+        case .apiOpus: return (.claudeAPI, "claude-opus-5")
+        case .apiFable: return (.claudeAPI, "claude-fable-5")
+        case .claudeCode: return (.claudeCode, nil)
+        case .claudeCodeFable: return (.claudeCode, "claude-fable-5")
+        case .codexSol: return (.codexCLI, "gpt-5.6-sol")
+        }
+    }
+
     /// True when the current provider can actually take a request.
-    static var isConfigured: Bool {
-        switch Settings.shared.aiProvider {
+    static var isConfigured: Bool { isConfigured(for: .auto) }
+
+    static func isConfigured(for engine: EngineChoice) -> Bool {
+        switch resolution(for: engine).provider {
         case .claudeAPI: return !Settings.shared.anthropicAPIKey.isEmpty
         case .claudeCode: return cliPath("claude") != nil
         case .codexCLI: return cliPath("codex") != nil
         }
     }
 
-    /// `fast` routes to the quickest model (polish is grammar fixup — small
-    /// models are plenty); AI Edit/Compose keep the user's chosen model.
+    /// `fast` routes to the quickest model when no explicit engine is chosen
+    /// (polish is grammar fixup — small models are plenty).
     private static func send(system: String, user: String, maxTokens: Int, timeout: TimeInterval,
-                             fast: Bool = false, completion: @escaping (String?) -> Void) {
-        switch Settings.shared.aiProvider {
+                             fast: Bool = false, engine: EngineChoice = .auto,
+                             completion: @escaping (String?) -> Void) {
+        let res = resolution(for: engine)
+        switch res.provider {
         case .claudeAPI:
+            let model = res.model ?? (fast ? "claude-haiku-4-5" : Settings.shared.polishModel)
             sendAPI(system: system, user: user, maxTokens: maxTokens, timeout: timeout,
-                    model: fast ? "claude-haiku-4-5" : Settings.shared.polishModel,
-                    completion: completion)
+                    model: model, completion: completion)
         case .claudeCode, .codexCLI:
-            runCLI(system: system, user: user, fast: fast, completion: completion)
+            runCLI(system: system, user: user, fast: fast,
+                   provider: res.provider, modelOverride: res.model, completion: completion)
         }
     }
 
@@ -226,9 +256,9 @@ enum ClaudePolish {
     }
 
     private static func runCLI(system: String, user: String, fast: Bool = false,
+                               provider: AIProvider, modelOverride: String? = nil,
                                completion: @escaping (String?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
-            let provider = Settings.shared.aiProvider
             let outFile = FileManager.default.temporaryDirectory
                 .appendingPathComponent("supershout-\(UUID().uuidString).txt")
             let process = Process()
@@ -238,7 +268,7 @@ enum ClaudePolish {
                 guard let bin = cliPath("claude") else { completion(nil); return }
                 process.executableURL = URL(fileURLWithPath: bin)
                 var args = ["-p", "--system-prompt", system]
-                let model = fast ? "haiku" : Settings.shared.claudeCodeModel
+                let model = modelOverride ?? (fast ? "haiku" : Settings.shared.claudeCodeModel)
                 if !model.isEmpty { args += ["--model", model] }
                 process.arguments = args
                 stdinText = user
@@ -246,7 +276,7 @@ enum ClaudePolish {
                 guard let bin = cliPath("codex") else { completion(nil); return }
                 process.executableURL = URL(fileURLWithPath: bin)
                 var args = ["exec", "--skip-git-repo-check", "-o", outFile.path]
-                let model = Settings.shared.codexModel
+                let model = modelOverride ?? Settings.shared.codexModel
                 if !model.isEmpty { args += ["-m", model] }
                 process.arguments = args
                 stdinText = system + "\n\n" + user

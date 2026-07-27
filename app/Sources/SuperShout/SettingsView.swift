@@ -27,6 +27,11 @@ struct SettingsView: View {
         uniqueKeysWithValues: HoldKey.allCases.map { ($0, Settings.shared.action(for: $0)) }
     )
 
+    @State private var keyEngines: [HoldKey: EngineChoice] = Dictionary(
+        uniqueKeysWithValues: HoldKey.allCases.map { ($0, Settings.shared.engine(for: $0)) }
+    )
+
+    @ViewBuilder
     private func keyRow(_ key: HoldKey) -> some View {
         Picker(key.displayName, selection: Binding(
             get: { keyActions[key] ?? .off },
@@ -37,6 +42,18 @@ struct SettingsView: View {
             }
         )) {
             ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
+        }
+        if (keyActions[key] ?? .off).needsAPIKey {
+            Picker("        ↳ engine", selection: Binding(
+                get: { keyEngines[key] ?? .auto },
+                set: { newValue in
+                    keyEngines[key] = newValue
+                    Settings.shared.setEngine(newValue, for: key)
+                }
+            )) {
+                ForEach(EngineChoice.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .font(.callout)
         }
     }
     @State private var removeFillers = Settings.shared.removeFillers

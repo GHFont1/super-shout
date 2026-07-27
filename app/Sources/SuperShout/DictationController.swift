@@ -34,6 +34,7 @@ final class DictationController {
     }
     private var handsFreeActive = false
     private var activeAction: KeyAction = .dictate
+    private var activeEngine: EngineChoice = .auto
     private var capturedSelection: String?
     /// Frontmost app when dictation started — results only auto-paste there.
     private var sessionApp: String?
@@ -77,13 +78,14 @@ final class DictationController {
 
     private func handlePress(_ key: HoldKey, handsFree: Bool) {
         let action = Settings.shared.action(for: key)
-        Log.write("handlePress: key=\(key.rawValue) action=\(action.rawValue) state=\(state) configured=\(ClaudePolish.isConfigured)")
+        let engine = Settings.shared.engine(for: key)
+        Log.write("handlePress: key=\(key.rawValue) action=\(action.rawValue) engine=\(engine.rawValue) state=\(state)")
         guard action != .off else { return }
-        if action.needsAPIKey && !ClaudePolish.isConfigured {
-            hud.flashError("Set up an AI provider in Settings to use AI modes")
+        if action.needsAPIKey && !ClaudePolish.isConfigured(for: engine) {
+            hud.flashError("That key's engine isn't set up — check the AI provider in Settings")
             return
         }
-        beginListening(action: action, handsFree: handsFree)
+        beginListening(action: action, engine: engine, handsFree: handsFree)
     }
 
     private func toggleHandsFree(_ key: HoldKey) {
@@ -102,7 +104,7 @@ final class DictationController {
         }
     }
 
-    private func beginListening(action: KeyAction, handsFree: Bool) {
+    private func beginListening(action: KeyAction, engine: EngineChoice = .auto, handsFree: Bool) {
         if case .listening = state { return }
         if case .processing = state {
             // Previous dictation is still wrapping up. If the user is already
@@ -111,13 +113,14 @@ final class DictationController {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 guard let self else { return }
                 let stillWanted = handsFree ? self.handsFreeActive : self.hotkey.keyCurrentlyDown
-                if stillWanted { self.beginListening(action: action, handsFree: handsFree) }
+                if stillWanted { self.beginListening(action: action, engine: engine, handsFree: handsFree) }
             }
             return
         }
         guard case .idle = state else { return }
 
         activeAction = action
+        activeEngine = engine
         capturedSelection = nil
         sessionApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         sessionAppName = NSWorkspace.shared.frontmostApplication?.localizedName
@@ -239,7 +242,7 @@ final class DictationController {
                 self.deliver(cleaned, pressEnter: pressEnter)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: fallback)
-            ClaudePolish.polish(cleaned, appName: sessionAppName) { polished in
+            ClaudePolish.polish(cleaned, appName: sessionAppName, engine: activeEngine) { polished in
                 DispatchQueue.main.async {
                     guard !delivered else { return }
                     delivered = true
@@ -275,7 +278,7 @@ final class DictationController {
         Log.write("DEEP instruction: \"\(instruction.prefix(120))\"")
         state = .idle
         hud.flashInfo("Deep research started — I'll copy the result to your clipboard when it's ready")
-        ClaudePolish.deepResearch(instruction) { [weak self] result in
+        ClaudePolish.deepResearch(instruction, engine: activeEngine) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let result {
@@ -313,7 +316,7 @@ final class DictationController {
         Log.write("AGENT instruction: \"\(instruction.prefix(120))\" selection=\(selection?.count ?? 0) chars")
         state = .idle
         hud.flashInfo("On it — working in the background, I'll report when done")
-        ClaudePolish.agentAct(instruction: instruction, selection: selection) { [weak self] report in
+        ClaudePolish.agentAct(instruction: instruction, selection: selection, engine: activeEngine) { [weak self] report in
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let report {
@@ -342,7 +345,7 @@ final class DictationController {
         let selection = capturedSelection
         Log.write("ASK: \"\(question.prefix(100))\" selection=\(selection?.count ?? 0) chars")
         state = .idle
-        AskWindowController.shared.ask(question, selection: selection)
+        AskWindowController.shared.ask(question, selection: selection, engine: activeEngine)
     }
 
     private func finishRewrite(_ raw: String) {
@@ -364,7 +367,7 @@ final class DictationController {
         }
         Log.write("rewrite transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars)")
         hud.showStatus("Rewriting in your voice…")
-        ClaudePolish.rewrite(cleaned, appName: sessionAppName) { [weak self] result in
+        ClaudePolish.rewrite(cleaned, appName: sessionAppName, engine: activeEngine) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 Log.write("rewrite result: \(result.map { "\($0.count) chars" } ?? "FAILED — falling back to literal")")
@@ -407,10 +410,10 @@ final class DictationController {
         }
 
         if action == .aiEdit, let selection = capturedSelection, !selection.isEmpty {
-            ClaudePolish.transform(selection: selection, instruction: instruction, completion: complete)
+            ClaudePolish.transform(selection: selection, instruction: instruction, engine: activeEngine, completion: complete)
         } else {
             // AI Edit with nothing selected behaves as Compose.
-            ClaudePolish.compose(instruction, appName: sessionAppName, completion: complete)
+            ClaudePolish.compose(instruction, appName: sessionAppName, engine: activeEngine, completion: complete)
         }
     }
 

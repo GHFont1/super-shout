@@ -13,6 +13,8 @@ final class AskSession: ObservableObject {
     @Published var messages: [Message] = []
     @Published var pending = false
     @Published var draft = ""
+    /// Engine of the key that opened the conversation; follow-ups reuse it.
+    var engine: EngineChoice = .auto
 
     func ask(_ question: String, selection: String?) {
         var q = question
@@ -36,7 +38,7 @@ final class AskSession: ObservableObject {
         let transcript = messages
             .map { "\($0.fromUser ? "User" : "Assistant"): \($0.text)" }
             .joined(separator: "\n\n")
-        ClaudePolish.ask(transcript) { [weak self] answer in
+        ClaudePolish.ask(transcript, engine: engine) { [weak self] answer in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.pending = false
@@ -55,10 +57,11 @@ final class AskWindowController {
     private var window: NSWindow?
     private let session = AskSession()
 
-    func ask(_ question: String, selection: String?) {
+    func ask(_ question: String, selection: String?, engine: EngineChoice = .auto) {
         if window == nil { build() }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        session.engine = engine
         session.ask(question, selection: selection)
     }
 
