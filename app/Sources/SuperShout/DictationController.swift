@@ -154,6 +154,7 @@ final class DictationController {
         switch action {
         case .dictate: return "Listening…"
         case .aiRewrite: return "AI Rewrite — speak freely, it types it your way…"
+        case .aiDeep: return "Deep Research — say what to look up and write…"
         case .aiEdit: return "AI Edit — say what to change…"
         case .aiCompose: return "AI Compose — say what to write…"
         case .off: return ""
@@ -164,6 +165,7 @@ final class DictationController {
         switch action {
         case .dictate: return .orange
         case .aiRewrite: return .green
+        case .aiDeep: return .indigo
         case .aiEdit: return .purple
         case .aiCompose: return .cyan
         case .off: return .orange
@@ -193,6 +195,8 @@ final class DictationController {
                 self.finishRewrite(raw)
             case .aiEdit, .aiCompose:
                 self.finishAI(raw, action: action)
+            case .aiDeep:
+                self.finishDeep(raw)
             }
         }
     }
@@ -243,6 +247,43 @@ final class DictationController {
     /// AI Rewrite: the whole transcript is retyped in the user's voice,
     /// formatted for the destination. On AI failure the cleaned literal
     /// dictation is inserted instead — speech is never lost.
+    /// Deep research runs for minutes, so it never holds the dictation state:
+    /// it launches in the background, dictation returns to idle immediately,
+    /// and the finished deliverable arrives on the clipboard + history.
+    private func finishDeep(_ raw: String) {
+        var opts = CleanupEngine.CleanOptions()
+        opts.allowTerminalPunctuation = false
+        opts.allowLists = false
+        let instruction = CleanupEngine.clean(raw, options: opts)
+        guard !instruction.isEmpty else {
+            state = .idle
+            return
+        }
+        guard ClaudePolish.isDeepAvailable else {
+            state = .idle
+            hud.flashError("Deep Research needs the Claude Code CLI installed")
+            return
+        }
+        Log.write("DEEP instruction: \"\(instruction.prefix(120))\"")
+        state = .idle
+        hud.flashInfo("Deep research started — I'll copy the result to your clipboard when it's ready")
+        ClaudePolish.deepResearch(instruction) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let result {
+                    self.history.insert(result, at: 0)
+                    if self.history.count > 25 { self.history.removeLast() }
+                    Settings.shared.historyStore = self.history
+                    self.injector.copyOnly(result)
+                    SoundCue.listenStop.play()
+                    self.hud.flashInfo("Deep research done — result copied, press ⌘V (also in Recent Transcripts)")
+                } else {
+                    self.hud.flashError("Deep research failed — see ~/Library/Logs/SuperShout.log")
+                }
+            }
+        }
+    }
+
     private func finishRewrite(_ raw: String) {
         // Keep punctuation so the model sees sentence boundaries; skip local
         // list formatting — structure is the model's job here.

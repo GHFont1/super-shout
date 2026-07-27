@@ -66,6 +66,70 @@ enum ClaudePolish {
         )
     }
 
+    /// AI Deep Research mode: a full agentic Claude Code run that looks facts
+    /// up first (files, MCP servers, local tooling) and then writes the
+    /// deliverable. Minutes, not seconds — runs in the background and the
+    /// result is handed over via clipboard + history.
+    static func deepResearch(_ instruction: String, completion: @escaping (String?) -> Void) {
+        let system = "You are a research assistant running on the user's own Mac with access to their files and tools. "
+            + "First use your available tools (project files, MCP servers, local scripts, read-only shell commands) to look up the facts the request needs. "
+            + "Research is read-only: never send emails or messages, never place or cancel orders, never modify data — the user reviews and sends everything themselves. "
+            + "Then produce the final deliverable the request asks for (usually an email or message body, sometimes a summary or report). "
+            + "Return ONLY that final text, ready to paste — no explanation of your research process, no preamble. Never use em dashes."
+            + businessContextBlock()
+        runDeepClaude(system: system, user: instruction, completion: completion)
+    }
+
+    static var isDeepAvailable: Bool { cliPath("claude") != nil }
+
+    /// Dedicated deep runner: always the Claude Code CLI (agentic, tool-using),
+    /// from $HOME so global CLAUDE.md and MCP config load, with a 10 min cap.
+    private static func runDeepClaude(system: String, user: String, completion: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let bin = cliPath("claude") else { completion(nil); return }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: bin)
+            var args = ["-p", "--permission-mode", "bypassPermissions", "--append-system-prompt", system]
+            let model = Settings.shared.claudeCodeModel
+            if !model.isEmpty { args += ["--model", model] }
+            process.arguments = args
+            process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = (env["PATH"].map { $0 + ":" } ?? "") + cliSearchPaths.joined(separator: ":")
+            process.environment = env
+
+            let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
+            process.standardInput = stdin
+            process.standardOutput = stdout
+            process.standardError = stderr
+
+            Log.write("DEEP start: args=\(args)")
+            do { try process.run() } catch {
+                Log.write("DEEP launch failed: \(error.localizedDescription)")
+                completion(nil); return
+            }
+            stdin.fileHandleForWriting.write(Data(user.utf8))
+            stdin.fileHandleForWriting.closeFile()
+
+            let killer = DispatchWorkItem { if process.isRunning { process.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 600, execute: killer)
+            let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            killer.cancel()
+
+            let trimmed = String(data: outData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if process.terminationStatus != 0 || trimmed?.isEmpty != false {
+                let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                Log.write("DEEP failed: status=\(process.terminationStatus) stderr=\(err.suffix(300))")
+                completion(nil)
+                return
+            }
+            Log.write("DEEP done: \(trimmed?.count ?? 0) chars")
+            completion(trimmed)
+        }
+    }
+
     /// Light context awareness: the target app shapes tone (a Slack message
     /// reads differently from a Mail draft) without any screen capture.
     private static func appContextLine(_ appName: String?) -> String {
