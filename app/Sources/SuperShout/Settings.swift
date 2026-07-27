@@ -25,13 +25,13 @@ enum EngineChoice: String, CaseIterable, Codable {
     var displayName: String {
         switch self {
         case .auto: return "Default engine"
-        case .apiHaiku: return "Claude Haiku (API, fastest)"
-        case .apiSonnet: return "Claude Sonnet (API)"
-        case .apiOpus: return "Claude Opus (API)"
-        case .apiFable: return "Claude Fable 5 (API, smartest)"
-        case .claudeCode: return "Claude Code (your Claude plan)"
-        case .claudeCodeFable: return "Claude Code — Fable 5"
-        case .codexSol: return "Codex — GPT-5.6-SOL (ChatGPT plan)"
+        case .apiHaiku: return "Claude Haiku (fastest)"
+        case .apiSonnet: return "Claude Sonnet"
+        case .apiOpus: return "Claude Opus"
+        case .apiFable: return "Claude Fable 5 (smartest)"
+        case .claudeCode: return "Claude Code (plan default)"
+        case .claudeCodeFable: return "Claude Code — Fable 5 (agent)"
+        case .codexSol: return "ChatGPT — GPT-5.6-SOL"
         }
     }
 }

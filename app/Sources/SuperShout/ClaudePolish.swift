@@ -199,14 +199,21 @@ enum ClaudePolish {
             + "facts, and tone, and follow any rules it states. Never mention that you were given it:\n" + ctx
     }
 
-    /// Per-key engine → concrete provider + model override (nil = provider default).
+    /// Per-key engine → concrete provider + model override (nil = provider
+    /// default). Claude model picks are auth-agnostic: they ride the API key
+    /// when one is saved (fastest), otherwise the Claude plan sign-in — the
+    /// user chooses a model, never a billing route.
     static func resolution(for engine: EngineChoice) -> (provider: AIProvider, model: String?) {
+        let hasKey = !Settings.shared.anthropicAPIKey.isEmpty
+        func claudeModel(api: String, cli: String) -> (AIProvider, String?) {
+            hasKey ? (.claudeAPI, api) : (.claudeCode, cli)
+        }
         switch engine {
         case .auto: return (Settings.shared.aiProvider, nil)
-        case .apiHaiku: return (.claudeAPI, "claude-haiku-4-5")
-        case .apiSonnet: return (.claudeAPI, "claude-sonnet-5")
-        case .apiOpus: return (.claudeAPI, "claude-opus-5")
-        case .apiFable: return (.claudeAPI, "claude-fable-5")
+        case .apiHaiku: return claudeModel(api: "claude-haiku-4-5", cli: "haiku")
+        case .apiSonnet: return claudeModel(api: "claude-sonnet-5", cli: "sonnet")
+        case .apiOpus: return claudeModel(api: "claude-opus-5", cli: "opus")
+        case .apiFable: return claudeModel(api: "claude-fable-5", cli: "claude-fable-5")
         case .claudeCode: return (.claudeCode, nil)
         case .claudeCodeFable: return (.claudeCode, "claude-fable-5")
         case .codexSol: return (.codexCLI, "gpt-5.6-sol")
