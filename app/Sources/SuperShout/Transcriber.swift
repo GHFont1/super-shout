@@ -78,18 +78,45 @@ final class Transcriber: NSObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 if let result {
-                    self.segments[gen] = result.bestTranscription.formattedString
+                    let text = result.bestTranscription.formattedString
+                    if !text.isEmpty { self.autoRestartCount = 0 }
+                    self.segments[gen] = text
                     self.onPartial?(self.assembledTranscript())
                     if result.isFinal {
                         self.reapRetiredTasks()
-                        if self.finishing, gen == self.generation { self.completeFinish() }
+                        if self.finishing {
+                            if gen == self.generation { self.completeFinish() }
+                        } else if gen == self.generation {
+                            // The recognizer finalized itself after a pause in
+                            // speech. Seal this segment and hand off to a fresh
+                            // task so nothing after the pause is lost.
+                            NSLog("SuperShout: recognizer self-finalized (gen \(gen)) — continuing with next segment")
+                            self.restartMidDictation()
+                        }
                     }
                 } else if error != nil {
                     self.reapRetiredTasks()
-                    if self.finishing, gen == self.generation { self.completeFinish() }
+                    if self.finishing {
+                        if gen == self.generation { self.completeFinish() }
+                    } else if gen == self.generation, self.engine.isRunning {
+                        NSLog("SuperShout: recognition error mid-dictation (gen \(gen)) — restarting")
+                        self.restartMidDictation()
+                    }
                 }
             }
         }
+    }
+
+    /// Restart guard so a persistently failing recognizer can't spin.
+    private var autoRestartCount = 0
+
+    private func restartMidDictation() {
+        autoRestartCount += 1
+        guard autoRestartCount <= 8 else {
+            NSLog("SuperShout: too many recognizer restarts — giving up until finish")
+            return
+        }
+        startRecognitionTask()
     }
 
     /// Hands the audio stream to a fresh recognition task before the current
