@@ -31,6 +31,7 @@ struct SettingsView: View {
     @State private var smartLists = Settings.shared.smartLists
     @State private var aiPolish = Settings.shared.aiPolishEnabled
     @State private var personalStyle = Settings.shared.personalStyle
+    @State private var businessContext = Settings.shared.businessContext
     @State private var apiKey = Settings.shared.anthropicAPIKey
     @State private var model = Settings.shared.polishModel
     @State private var provider = Settings.shared.aiProvider
@@ -220,7 +221,20 @@ struct SettingsView: View {
                     Settings.shared.personalStyle = Settings.defaultPersonalStyle
                     personalStyle = Settings.defaultPersonalStyle
                 }
-                Text("Without a provider set up, dictation works fully on-device and nothing ever leaves this Mac.")
+            }
+
+            Section("Business brain (AI context)") {
+                Text("Facts the AI knows on every request — your company, vendors, mailboxes, rules. Say \"email Classic about the PO\" and it knows who Classic is. Edit freely; add anything it should always know.")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $businessContext)
+                    .font(.system(size: 12))
+                    .frame(height: 120)
+                    .onChange(of: businessContext) { Settings.shared.businessContext = businessContext }
+                Button("Restore default business context") {
+                    Settings.shared.businessContext = Settings.defaultBusinessContext
+                    businessContext = Settings.defaultBusinessContext
+                }
+                Text("Sent only with AI Rewrite, AI Edit, and AI Compose requests. Without a provider set up, dictation works fully on-device and nothing ever leaves this Mac.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

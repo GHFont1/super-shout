@@ -108,6 +108,27 @@ final class Settings {
         then stop. For emails: brief greeting, tight paragraphs, sign off simply as Benny.
         """
 
+    /// Facts about the speaker's business that ride along with every AI
+    /// request, so "email Classic about the PO" needs no explanation.
+    var businessContext: String {
+        get {
+            let stored = d.string(forKey: "businessContext") ?? ""
+            return stored.isEmpty ? Settings.defaultBusinessContext : stored
+        }
+        set { d.set(newValue, forKey: "businessContext") }
+    }
+
+    static let defaultBusinessContext = """
+        The speaker is Benny Scalzo, owner of Great Call Athletics (GCA), a sporting goods \
+        retailer (greatcallathletics.com) selling on Amazon, eBay, Walmart, Shopify, Temu, and \
+        TikTok Shop, plus a physical store. Key distributors: Classic Products (bowling; IN/FL/NV/TX \
+        warehouses), Ace Mitchell (bowling; TN/OH/NY), HEAD, Wilson, Cliff Keen, ScrapLife, Smitty, \
+        Matman, Diamond, Longstreth. Vendor operational emails come from orders@greatcallathletics.com \
+        and are signed "Great Call Athletics". "PO" means purchase order. Never reveal to a vendor \
+        which other distributor an order was rerouted to, internal costs, or inventory sources. \
+        Common terms: UPC, ASIN, SKU, FBA, FBM, FNSKU, Duoplane (order routing), Seller Central.
+        """
+
     /// The key currently assigned to plain dictation, for UI copy.
     var dictateKeyDisplay: String {
         HoldKey.allCases.first { action(for: $0) == .dictate }?.displayName ?? "fn (🌐)"

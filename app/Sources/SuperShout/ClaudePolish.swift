@@ -32,7 +32,8 @@ enum ClaudePolish {
                 + "if it's a chat message or note, keep it as one. Never add facts, opinions, or promises they didn't say. "
                 + "Never use em dashes. Return only the finished text with no preamble and no surrounding quotes."
                 + (style.isEmpty ? "" : "\n\nThe speaker's writing style: \(style)")
-                + appContextLine(appName),
+                + appContextLine(appName)
+                + businessContextBlock(),
             user: transcript,
             maxTokens: 4096,
             timeout: 25,
@@ -43,7 +44,8 @@ enum ClaudePolish {
     /// AI Edit mode: applies a spoken instruction to the selected text.
     static func transform(selection: String, instruction: String, completion: @escaping (String?) -> Void) {
         send(
-            system: "You rewrite text according to a spoken instruction. Apply the instruction faithfully. Keep everything the instruction does not cover unchanged, including line breaks and formatting. Return only the rewritten text with no preamble, no explanations, and no surrounding quotes. Never use em dashes.",
+            system: "You rewrite text according to a spoken instruction. Apply the instruction faithfully. Keep everything the instruction does not cover unchanged, including line breaks and formatting. Return only the rewritten text with no preamble, no explanations, and no surrounding quotes. Never use em dashes."
+                + businessContextBlock(),
             user: "INSTRUCTION: \(instruction)\n\nTEXT:\n\(selection)",
             maxTokens: 4096,
             timeout: 25,
@@ -55,7 +57,8 @@ enum ClaudePolish {
     static func compose(_ instruction: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
         send(
             system: "You write text on the user's behalf from a spoken request. Return only the finished text, ready to be inserted exactly where they are typing. No preamble, no explanations, no surrounding quotes, no markdown unless the request implies it. Write naturally and concisely in the tone the request implies. Never use em dashes."
-                + appContextLine(appName),
+                + appContextLine(appName)
+                + businessContextBlock(),
             user: instruction,
             maxTokens: 4096,
             timeout: 25,
@@ -68,6 +71,15 @@ enum ClaudePolish {
     private static func appContextLine(_ appName: String?) -> String {
         guard let appName, !appName.isEmpty else { return "" }
         return " The text will be inserted into the app \"\(appName)\" — match the tone and formatting conventions people use there."
+    }
+
+    /// The speaker's standing business facts (who their vendors are, how they
+    /// sign emails) — so "email Classic about the PO" needs no explanation.
+    private static func businessContextBlock() -> String {
+        let ctx = Settings.shared.businessContext.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ctx.isEmpty else { return "" }
+        return "\n\nStanding context about the speaker and their business — use it to resolve names, "
+            + "facts, and tone, and follow any rules it states. Never mention that you were given it:\n" + ctx
     }
 
     /// True when the current provider can actually take a request.
