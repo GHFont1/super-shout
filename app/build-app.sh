@@ -33,9 +33,29 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Sign with a real identity when available so TCC grants survive rebuilds.
-IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/{print $2; exit}')
-codesign --force --deep --sign "${IDENTITY:--}" --identifier com.gca.supershout "$APP"
+# Hardened runtime entitlements (required for notarization; mic access).
+cat > build/entitlements.plist <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>
+ENT
+
+# Prefer Developer ID (public distribution + notarization); fall back to the
+# development identity so builds still work on machines without it.
+IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')
+if [[ -n "$IDENTITY" ]]; then
+    codesign --force --deep --sign "$IDENTITY" --identifier com.gca.supershout \
+        --options runtime --entitlements build/entitlements.plist --timestamp "$APP"
+    echo "Signed with: $IDENTITY (hardened runtime)"
+else
+    IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/{print $2; exit}')
+    codesign --force --deep --sign "${IDENTITY:--}" --identifier com.gca.supershout "$APP"
+    echo "Signed with: ${IDENTITY:-ad-hoc}"
+fi
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
