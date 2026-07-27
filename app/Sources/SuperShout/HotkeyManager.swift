@@ -11,6 +11,9 @@ final class HotkeyManager {
     var onQuickTap: ((HoldKey) -> Void)?
     var onEscape: (() -> Void)?
     var isListening: (() -> Bool)?
+    /// Fired when a left-side modifier is held alone for a while — the user
+    /// almost certainly meant the right-side hold key.
+    var onMisusedModifier: (() -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -46,6 +49,7 @@ final class HotkeyManager {
                 return Unmanaged.passUnretained(event)
             }
             if type == .keyDown {
+                manager.sawOtherKey = true
                 let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
                 if keyCode == 53, manager.isListening?() == true {  // Esc cancels dictation
                     DispatchQueue.main.async { manager.onEscape?() }
@@ -75,9 +79,23 @@ final class HotkeyManager {
         NSLog("SuperShout: event tap active (AX trusted=\(AXIsProcessTrusted()))")
     }
 
+    /// Left ⌘ (55), left ⌥ (58), left ⌃ (59), right ⌃ (62) — not hold keys
+    /// (shortcuts live there), but a lone long hold gets a helpful hint.
+    private static let hintKeys: Set<Int64> = [55, 58, 59, 62]
+    private var hintKeyDownAt: [Int64: Date] = [:]
+    fileprivate var sawOtherKey = false
+
     private func handleFlagsChanged(_ event: CGEvent) {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard let key = HoldKey.allCases.first(where: { $0.keyCode == keyCode }) else { return }
+        if Self.hintKeys.contains(keyCode) {
+            handleHintKey(keyCode, event: event)
+            return
+        }
+        guard let key = HoldKey.allCases.first(where: { $0.keyCode == keyCode }) else {
+            Log.write("flagsChanged ignored: keyCode=\(keyCode) flags=\(String(event.flags.rawValue, radix: 16))")
+            return
+        }
+        Log.write("flagsChanged: key=\(key.rawValue) action=\(Settings.shared.action(for: key).rawValue) flags=\(String(event.flags.rawValue, radix: 16))")
         guard Settings.shared.action(for: key) != .off else { return }
 
         let isDown: Bool
@@ -91,16 +109,36 @@ final class HotkeyManager {
         if isDown && !wasDown {
             keyDown[key] = true
             pressStartedAt[key] = Date()
+            Log.write("press: \(key.rawValue)")
             DispatchQueue.main.async { self.onPress?(key) }
         } else if !isDown && wasDown {
             keyDown[key] = false
             let held = pressStartedAt[key].map { Date().timeIntervalSince($0) } ?? 1
+            Log.write("release: \(key.rawValue) held=\(String(format: "%.2f", held))s")
             DispatchQueue.main.async {
                 if held < 0.35 {
                     self.onQuickTap?(key)
                 } else {
                     self.onRelease?(key)
                 }
+            }
+        }
+    }
+
+    private func handleHintKey(_ keyCode: Int64, event: CGEvent) {
+        let mask: CGEventFlags = keyCode == 55 ? .maskCommand : keyCode == 58 ? .maskAlternate : .maskControl
+        let isDown = event.flags.contains(mask)
+        if isDown && hintKeyDownAt[keyCode] == nil {
+            hintKeyDownAt[keyCode] = Date()
+            sawOtherKey = false
+        } else if !isDown, let started = hintKeyDownAt[keyCode] {
+            hintKeyDownAt[keyCode] = nil
+            let held = Date().timeIntervalSince(started)
+            // Held alone for a while with no shortcut typed → they wanted the
+            // right-side hold key.
+            if held >= 0.8 && !sawOtherKey && isListening?() != true {
+                Log.write("hint: left/ctrl modifier keyCode=\(keyCode) held alone \(String(format: "%.2f", held))s")
+                DispatchQueue.main.async { self.onMisusedModifier?() }
             }
         }
     }

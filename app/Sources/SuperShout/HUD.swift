@@ -59,6 +59,15 @@ final class HUDController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.hide() }
     }
 
+    func flashInfo(_ message: String) {
+        model.mode = .info
+        model.statusText = message
+        show()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            if self?.model.mode == .info { self?.hide() }
+        }
+    }
+
     private func show() {
         if panel == nil { buildPanel() }
         // Re-center every time — the main screen may have changed since the
@@ -103,7 +112,7 @@ final class HUDController {
     }
 }
 
-enum HUDMode { case listening, processing, done, error }
+enum HUDMode { case listening, processing, done, error, info }
 
 final class HUDModel: ObservableObject {
     @Published var mode: HUDMode = .listening
@@ -169,6 +178,7 @@ struct ShoutBarView: View {
         case .processing: return "ellipsis"
         case .done: return "checkmark.circle.fill"
         case .error: return "exclamationmark.triangle.fill"
+        case .info: return "info.circle.fill"
         }
     }
 
@@ -178,6 +188,7 @@ struct ShoutBarView: View {
         case .processing: return .yellow
         case .done: return .green
         case .error: return .red
+        case .info: return .yellow
         }
     }
 }

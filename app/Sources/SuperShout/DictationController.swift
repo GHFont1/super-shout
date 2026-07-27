@@ -42,6 +42,10 @@ final class DictationController {
         hotkey.onRelease = { [weak self] _ in self?.endListening() }
         hotkey.onQuickTap = { [weak self] key in self?.toggleHandsFree(key) }
         hotkey.onEscape = { [weak self] in self?.cancelListening() }
+        hotkey.onMisusedModifier = { [weak self] in
+            guard let self, case .idle = self.state else { return }
+            self.hud.flashInfo("Use the RIGHT-side keys: Right ⌘ = AI Edit, Right ⌥ = AI Compose, fn = Dictate")
+        }
         hotkey.isListening = { [weak self] in
             if case .listening = self?.state { return true }
             return false
@@ -67,6 +71,7 @@ final class DictationController {
 
     private func handlePress(_ key: HoldKey, handsFree: Bool) {
         let action = Settings.shared.action(for: key)
+        Log.write("handlePress: key=\(key.rawValue) action=\(action.rawValue) state=\(state) configured=\(ClaudePolish.isConfigured)")
         guard action != .off else { return }
         if action.needsAPIKey && !ClaudePolish.isConfigured {
             hud.flashError("Set up an AI provider in Settings to use AI modes")
