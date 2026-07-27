@@ -19,8 +19,10 @@ final class Transcriber: NSObject {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
 
-    /// generation → best transcript for that task, assembled in order.
-    private var segments: [Int: String] = [:]
+    /// generation → transcript parts for that task, assembled in order. A task
+    /// usually has one part, but gains more when the recognizer resets itself
+    /// mid-task (see updateSegment) — sealed parts are never overwritten.
+    private var segments: [Int: [String]] = [:]
     private var generation = 0
     /// Old tasks kept alive until they deliver their final result.
     private var retiredTasks: [SFSpeechRecognitionTask] = []
@@ -87,7 +89,7 @@ final class Transcriber: NSObject {
         awaitingRestart = false
         generation += 1
         let gen = generation
-        segments[gen] = ""
+        segments[gen] = [""]
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -104,7 +106,7 @@ final class Transcriber: NSObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 if let result {
-                    self.segments[gen] = result.bestTranscription.formattedString
+                    self.updateSegment(gen: gen, text: result.bestTranscription.formattedString)
                     self.onPartial?(self.assembledTranscript())
                     if result.isFinal {
                         self.reapRetiredTasks()
@@ -190,11 +192,40 @@ final class Transcriber: NSObject {
         retiredTasks.removeAll { $0.state == .completed || $0.state == .canceling }
     }
 
+    /// Applies a new (partial or final) transcription for a task. The on-device
+    /// recognizer sometimes resets mid-task after a pause and starts the
+    /// transcript over — WITHOUT delivering isFinal first — so a blind
+    /// overwrite would silently drop everything said before the pause. When
+    /// the incoming text is dramatically shorter than what we have, seal the
+    /// existing text and let the new text accumulate as a fresh part.
+    private func updateSegment(gen: Int, text: String) {
+        var parts = segments[gen] ?? [""]
+        let current = parts.last ?? ""
+        if current.count > 20, text.count < current.count / 2 {
+            if current.hasPrefix(text) {
+                // Truncated re-delivery of what we already have — keep the longer.
+                NSLog("SuperShout: ignoring truncated update (gen \(gen), \(current.count)→\(text.count) chars)")
+            } else {
+                NSLog("SuperShout: recognizer reset detected (gen \(gen), \(current.count)→\(text.count) chars) — sealing earlier speech")
+                parts.append(text)
+            }
+        } else {
+            parts[parts.count - 1] = text
+        }
+        segments[gen] = parts
+    }
+
     private func assembledTranscript() -> String {
-        segments.sorted { $0.key < $1.key }
-            .map(\.value)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        let ordered = segments.sorted { $0.key < $1.key }.flatMap(\.value).filter { !$0.isEmpty }
+        // If the recognizer recovered after a detected reset and re-delivered
+        // the full text, the sealed part is a prefix of its successor — drop
+        // the duplicate rather than stuttering it.
+        var out: [String] = []
+        for (i, part) in ordered.enumerated() {
+            if i + 1 < ordered.count, ordered[i + 1].lowercased().hasPrefix(part.lowercased()) { continue }
+            out.append(part)
+        }
+        return out.joined(separator: " ")
     }
 
     /// Stops capture and completes as soon as the recognizer's final result

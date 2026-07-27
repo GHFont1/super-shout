@@ -16,6 +16,7 @@ struct SettingsView: View {
     }()
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var handsFreeTap = Settings.shared.handsFreeTap
     @State private var spokenCommands = Settings.shared.spokenCommands
     @State private var soundCues = Settings.shared.soundCues
     @State private var hudPosition = Settings.shared.hudPosition
@@ -54,7 +55,12 @@ struct SettingsView: View {
                     ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .onChange(of: rightOptionAction) { Settings.shared.setAction(rightOptionAction, for: .rightOption); AppDelegate.shared?.rebuildMenu() }
-                Text("Dictate types your words. AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. Hold and speak; release to run. Quick-tap locks hands-free; Esc cancels.")
+                Text("Dictate types your words. AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. Hold and speak; release to run; Esc cancels.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Toggle("Quick-tap locks hands-free dictation", isOn: $handsFreeTap)
+                    .onChange(of: handsFreeTap) { Settings.shared.handsFreeTap = handsFreeTap }
+                Text("Off means keys only work while held — an accidental tap never starts dictation.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Toggle("Start Super Shout at login", isOn: $launchAtLogin)

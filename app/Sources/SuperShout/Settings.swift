@@ -125,6 +125,13 @@ final class Settings {
         set { d.set(newValue, forKey: "smartEntities") }
     }
 
+    /// Quick-tap latches hands-free dictation. Off by default: accidental taps
+    /// of fn were starting phantom dictations, so hold-to-talk only.
+    var handsFreeTap: Bool {
+        get { d.object(forKey: "handsFreeTap") as? Bool ?? false }
+        set { d.set(newValue, forKey: "handsFreeTap") }
+    }
+
     /// "New line", "new paragraph", "scratch that" spoken while dictating.
     var spokenCommands: Bool {
         get { d.object(forKey: "spokenCommands") as? Bool ?? true }

@@ -14,6 +14,7 @@ enum ClaudePolish {
             user: text,
             maxTokens: 2048,
             timeout: 10,
+            fast: true,
             completion: completion
         )
     }
@@ -57,13 +58,17 @@ enum ClaudePolish {
         }
     }
 
+    /// `fast` routes to the quickest model (polish is grammar fixup — small
+    /// models are plenty); AI Edit/Compose keep the user's chosen model.
     private static func send(system: String, user: String, maxTokens: Int, timeout: TimeInterval,
-                             completion: @escaping (String?) -> Void) {
+                             fast: Bool = false, completion: @escaping (String?) -> Void) {
         switch Settings.shared.aiProvider {
         case .claudeAPI:
-            sendAPI(system: system, user: user, maxTokens: maxTokens, timeout: timeout, completion: completion)
+            sendAPI(system: system, user: user, maxTokens: maxTokens, timeout: timeout,
+                    model: fast ? "claude-haiku-4-5" : Settings.shared.polishModel,
+                    completion: completion)
         case .claudeCode, .codexCLI:
-            runCLI(system: system, user: user, completion: completion)
+            runCLI(system: system, user: user, fast: fast, completion: completion)
         }
     }
 
@@ -81,7 +86,8 @@ enum ClaudePolish {
         return nil
     }
 
-    private static func runCLI(system: String, user: String, completion: @escaping (String?) -> Void) {
+    private static func runCLI(system: String, user: String, fast: Bool = false,
+                               completion: @escaping (String?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let provider = Settings.shared.aiProvider
             let outFile = FileManager.default.temporaryDirectory
@@ -93,7 +99,7 @@ enum ClaudePolish {
                 guard let bin = cliPath("claude") else { completion(nil); return }
                 process.executableURL = URL(fileURLWithPath: bin)
                 var args = ["-p", "--system-prompt", system]
-                let model = Settings.shared.claudeCodeModel
+                let model = fast ? "haiku" : Settings.shared.claudeCodeModel
                 if !model.isEmpty { args += ["--model", model] }
                 process.arguments = args
                 stdinText = user
@@ -152,7 +158,7 @@ enum ClaudePolish {
     }
 
     private static func sendAPI(system: String, user: String, maxTokens: Int, timeout: TimeInterval,
-                                completion: @escaping (String?) -> Void) {
+                                model: String, completion: @escaping (String?) -> Void) {
         let key = Settings.shared.anthropicAPIKey
         guard !key.isEmpty, let url = URL(string: "https://api.anthropic.com/v1/messages") else {
             completion(nil)
@@ -160,7 +166,7 @@ enum ClaudePolish {
         }
 
         let body: [String: Any] = [
-            "model": Settings.shared.polishModel,
+            "model": model,
             "max_tokens": maxTokens,
             "system": system,
             "messages": [["role": "user", "content": user]]

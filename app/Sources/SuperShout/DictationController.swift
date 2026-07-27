@@ -86,6 +86,12 @@ final class DictationController {
     }
 
     private func toggleHandsFree(_ key: HoldKey) {
+        guard Settings.shared.handsFreeTap else {
+            // Hands-free latch is off: the press already started listening, so
+            // a tap just ends that too-short session (empty transcript, no-op).
+            endListening()
+            return
+        }
         if handsFreeActive {
             endListening()
         } else {
@@ -206,8 +212,23 @@ final class DictationController {
         }
         if Settings.shared.aiPolishEnabled, ClaudePolish.isConfigured {
             hud.showStatus("Polishing…")
+            // Polish must never make dictation feel slow: if it hasn't come
+            // back in 5 s, insert the local cleanup and drop the late result.
+            var delivered = false
+            let fallback = DispatchWorkItem { [weak self] in
+                guard let self, !delivered else { return }
+                delivered = true
+                Log.write("polish deadline hit — inserting local cleanup")
+                self.deliver(cleaned, pressEnter: pressEnter)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: fallback)
             ClaudePolish.polish(cleaned, appName: sessionAppName) { polished in
-                DispatchQueue.main.async { self.deliver(polished ?? cleaned, pressEnter: pressEnter) }
+                DispatchQueue.main.async {
+                    guard !delivered else { return }
+                    delivered = true
+                    fallback.cancel()
+                    self.deliver(polished ?? cleaned, pressEnter: pressEnter)
+                }
             }
         } else {
             deliver(cleaned, pressEnter: pressEnter)
