@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Shout — Voice dictation that works everywhere, stays on your Mac</title>
+<meta name="description" content="Super Shout is system-wide AI voice dictation for Mac. Hold a key, speak, and clean text appears wherever you're typing. 100% on-device, private, and free.">
+<style>
+:root{--bg:#0b0d12;--panel:#12151d;--ink:#eef1f6;--muted:#9aa3b2;--accent:#ff8a3d;--accent2:#ffb347;--line:rgba(255,255,255,.08)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+.wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+header{padding:28px 0;display:flex;justify-content:space-between;align-items:center}
+.logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
+.logo span{color:var(--accent)}
+nav a{color:var(--muted);margin-left:24px;font-size:14px}
+nav a:hover{color:var(--ink)}
+.hero{text-align:center;padding:72px 0 48px}
+.hero h1{font-size:clamp(38px,6vw,64px);font-weight:800;letter-spacing:-.03em;line-height:1.08}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{max-width:640px;margin:22px auto 0;color:var(--muted);font-size:19px}
+.cta{margin-top:36px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;padding:14px 30px;border-radius:12px;font-weight:600;font-size:16px}
+.btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#171004}
+.btn-ghost{border:1px solid var(--line);color:var(--ink)}
+.hint{margin-top:14px;color:var(--muted);font-size:13px}
+.bar-demo{margin:56px auto 0;max-width:460px;background:rgba(0,0,0,.6);border:1px solid var(--line);border-radius:999px;padding:16px 28px;display:flex;align-items:center;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.mic{width:34px;height:34px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.wave{display:flex;gap:3px;align-items:center;height:34px;flex:1}
+.wave i{width:4px;background:var(--accent);border-radius:2px;animation:w 1s ease-in-out infinite}
+@keyframes w{0%,100%{height:8px}50%{height:28px}}
+section{padding:72px 0;border-top:1px solid var(--line)}
+h2{font-size:34px;font-weight:800;letter-spacing:-.02em;text-align:center}
+.sub{text-align:center;color:var(--muted);max-width:600px;margin:12px auto 44px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px}
+.card h3{font-size:17px;margin-bottom:8px}
+.card .ico{font-size:26px;margin-bottom:14px}
+.card p{color:var(--muted);font-size:14.5px}
+table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:16px;overflow:hidden;font-size:15px}
+th,td{padding:15px 18px;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+td:first-child{color:var(--muted)}
+.yes{color:#5dd97c}.no{color:#ff6b6b}
+.tablewrap{overflow-x:auto;border-radius:16px;border:1px solid var(--line)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;counter-reset:s}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;position:relative}
+.step::before{counter-increment:s;content:counter(s);position:absolute;top:-14px;left:22px;background:var(--accent);color:#171004;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px}
+.step h3{margin:6px 0 8px;font-size:16px}
+.step p{color:var(--muted);font-size:14px}
+kbd{background:#1d2230;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 8px;font-family:inherit;font-size:13px}
+footer{padding:48px 0;text-align:center;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo">Super <span>Shout</span> 📣</div>
+  <nav><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#compare">vs Wispr Flow</a><a href="#start">Get Started</a></nav>
+</header>
+
+<div class="hero">
+  <h1>Speak anywhere.<br><em>Perfect text appears.</em></h1>
+  <p>Super Shout is system-wide voice dictation for your Mac. Hold a key, talk naturally, release — clean, punctuated text lands wherever your cursor is. Email, Slack, code, anywhere.</p>
+  <div class="cta">
+    <a class="btn btn-primary" href="SuperShout.zip" download>Download for Mac</a>
+    <a class="btn btn-ghost" href="#start">How it works</a>
+  </div>
+  <div class="hint">macOS 14+ · Apple silicon &amp; Intel · 100% free · Nothing leaves your Mac</div>
+  <div class="bar-demo">
+    <div class="mic">🎙️</div>
+    <div class="wave">
+      <i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.05s"></i><i style="animation-delay:.25s"></i><i style="animation-delay:.35s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:0s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.25s"></i><i style="animation-delay:.05s"></i><i style="animation-delay:.2s"></i>
+    </div>
+    <span style="color:var(--muted);font-size:13px">Listening…</span>
+  </div>
+</div>
+
+<section id="features">
+  <h2>Everything you love about dictation apps. None of the catches.</h2>
+  <p class="sub">Speaking is 4× faster than typing. Super Shout makes it feel effortless.</p>
+  <div class="grid">
+    <div class="card"><div class="ico">⌨️</div><h3>Hold-to-talk anywhere</h3><p>Hold <kbd>fn</kbd> (or Right ⌘ / Right ⌥), speak, release. Text is inserted at your cursor in any app — no window switching, ever.</p></div>
+    <div class="card"><div class="ico">🙌</div><h3>Hands-free mode</h3><p>Quick-tap the hotkey to lock the mic open for long emails and documents. Tap again when you're done.</p></div>
+    <div class="card"><div class="ico">🧹</div><h3>Automatic cleanup</h3><p>Filler words removed, punctuation and capitalization fixed — instantly, on-device. Optional Claude AI polish for perfect grammar.</p></div>
+    <div class="card"><div class="ico">📖</div><h3>Personal dictionary</h3><p>Teach it your names, brands, and SKUs once. "great call athletics" always comes out "Great Call Athletics."</p></div>
+    <div class="card"><div class="ico">🌊</div><h3>The Shout Bar</h3><p>A minimal floating pill shows a live waveform and your words as you speak — then gets out of the way.</p></div>
+    <div class="card"><div class="ico">⚡️</div><h3>Native &amp; instant</h3><p>A real Mac app, not an 800 MB Electron shell. Launches instantly, idles at ~0% CPU, and works with no internet at all.</p></div>
+  </div>
+</section>
+
+<section id="privacy">
+  <h2>Private by architecture, not by policy</h2>
+  <p class="sub">Other dictation apps stream your voice — and even screenshots of your screen — to the cloud. Super Shout doesn't.</p>
+  <div class="grid">
+    <div class="card"><div class="ico">🔒</div><h3>On-device transcription</h3><p>Speech recognition runs entirely on your Mac using Apple's neural engine. Your voice never touches a server.</p></div>
+    <div class="card"><div class="ico">📵</div><h3>Works offline</h3><p>Plane, dead zone, locked-down network — dictation keeps working because there's nothing to connect to.</p></div>
+    <div class="card"><div class="ico">👁️‍🗨️</div><h3>No screen capture. Ever.</h3><p>Super Shout never takes screenshots and never reads your screen. Cloud AI polish is strictly opt-in, off by default, and uses your own API key.</p></div>
+  </div>
+</section>
+
+<section id="compare">
+  <h2>Super Shout vs. Wispr Flow</h2>
+  <p class="sub">Same effortless dictation experience — without the subscription, the cloud, or the resource drain.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th></th><th>Super Shout</th><th>Wispr Flow</th></tr>
+    <tr><td>Price</td><td class="yes">Free</td><td class="no">$15/month (free tier capped at 2,000 words/week)</td></tr>
+    <tr><td>Works offline</td><td class="yes">✓ Always</td><td class="no">✗ Cloud-only</td></tr>
+    <tr><td>Voice stays on device</td><td class="yes">✓ Always</td><td class="no">✗ Sent to cloud servers</td></tr>
+    <tr><td>Screen capture</td><td class="yes">Never</td><td class="no">Screenshots for "context" (opt-in after backlash)</td></tr>
+    <tr><td>App footprint</td><td class="yes">Native Swift, ~20 MB RAM</td><td class="no">Electron, ~800 MB RAM idle</td></tr>
+    <tr><td>Hold-key push-to-talk</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+    <tr><td>Hands-free mode</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+    <tr><td>Filler-word cleanup</td><td class="yes">✓ On-device</td><td class="yes">✓ In cloud</td></tr>
+    <tr><td>Personal dictionary</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+    <tr><td>AI polish</td><td class="yes">Optional, your own Claude key</td><td class="yes">Built-in (their cloud)</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="start">
+  <h2>Up and running in one minute</h2>
+  <p class="sub">Three permission prompts, then you never think about it again.</p>
+  <div class="steps">
+    <div class="step"><h3>Download &amp; open</h3><p>Grab the app, drop it in Applications, and launch. It lives quietly in your menu bar.</p></div>
+    <div class="step"><h3>Grant permissions</h3><p>Approve Microphone, Speech Recognition, and Accessibility when macOS asks. That's what lets it type anywhere for you.</p></div>
+    <div class="step"><h3>Hold <kbd>fn</kbd> and talk</h3><p>Click into any text field, hold the key, say what you're thinking, release. Done.</p></div>
+  </div>
+  <div class="cta" style="margin-top:44px">
+    <a class="btn btn-primary" href="SuperShout.zip" download>Download Super Shout</a>
+  </div>
+</section>
+
+<footer>Super Shout 📣 — built by Great Call Athletics. Your voice, your Mac, your words.</footer>
+</div>
+</body>
+</html>

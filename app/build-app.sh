@@ -1,0 +1,42 @@
+#!/bin/bash
+# Builds SuperShout.app from the SwiftPM executable and installs to /Applications (optional).
+set -euo pipefail
+cd "$(dirname "$0")"
+
+swift build -c release
+
+APP=build/SuperShout.app
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp .build/release/SuperShout "$APP/Contents/MacOS/SuperShout"
+
+cat > "$APP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>SuperShout</string>
+    <key>CFBundleIdentifier</key><string>com.gca.supershout</string>
+    <key>CFBundleName</key><string>Super Shout</string>
+    <key>CFBundleDisplayName</key><string>Super Shout</string>
+    <key>CFBundleShortVersionString</key><string>1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSUIElement</key><true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Super Shout listens while you hold the hotkey so it can transcribe your speech.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Super Shout transcribes your speech on-device to insert text where you are typing.</string>
+</dict>
+</plist>
+PLIST
+
+codesign --force --deep --sign - "$APP"
+echo "Built $APP"
+
+if [[ "${1:-}" == "--install" ]]; then
+    rm -rf "/Applications/Super Shout.app"
+    cp -R "$APP" "/Applications/Super Shout.app"
+    echo "Installed to /Applications/Super Shout.app"
+fi
