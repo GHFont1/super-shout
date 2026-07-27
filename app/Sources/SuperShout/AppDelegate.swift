@@ -28,6 +28,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         requestPermissions()
         controller.start()
+
+        // Quiet update check shortly after launch, then daily.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { UpdateChecker.check() }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { _ in
+            UpdateChecker.check()
+        }
+    }
+
+    private var updateTimer: Timer?
+
+    @objc private func checkForUpdates() {
+        UpdateChecker.check(verbose: true)
     }
 
     private var axPollTimer: Timer?
@@ -153,6 +165,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         teach.target = self
         teach.isEnabled = !controller.history.isEmpty
         menu.addItem(teach)
+
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        menu.addItem(updates)
 
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
