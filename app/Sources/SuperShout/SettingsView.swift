@@ -30,6 +30,7 @@ struct SettingsView: View {
     @State private var autoPunctuate = Settings.shared.autoPunctuate
     @State private var smartLists = Settings.shared.smartLists
     @State private var aiPolish = Settings.shared.aiPolishEnabled
+    @State private var personalStyle = Settings.shared.personalStyle
     @State private var apiKey = Settings.shared.anthropicAPIKey
     @State private var model = Settings.shared.polishModel
     @State private var provider = Settings.shared.aiProvider
@@ -55,7 +56,7 @@ struct SettingsView: View {
                     ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .onChange(of: rightOptionAction) { Settings.shared.setAction(rightOptionAction, for: .rightOption); AppDelegate.shared?.rebuildMenu() }
-                Text("Dictate types your words. AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. Hold and speak; release to run; Esc cancels.")
+                Text("Dictate types your words. AI Rewrite retypes everything you said in your own voice, formatted for where you're typing (emails become emails). AI Edit rewrites the text you have selected per your spoken instruction. AI Compose writes finished text from a spoken request. Hold and speak; release to run; Esc cancels.")
                     .font(.caption).foregroundStyle(.secondary)
 
                 Toggle("Quick-tap locks hands-free dictation", isOn: $handsFreeTap)
@@ -206,6 +207,19 @@ struct SettingsView: View {
 
                 Toggle("Also polish plain dictation with AI", isOn: $aiPolish)
                     .onChange(of: aiPolish) { Settings.shared.aiPolishEnabled = aiPolish }
+            }
+
+            Section("Your voice (AI Rewrite style)") {
+                Text("AI Rewrite retypes your dictation in this style. Describe how you write — tone, sentence length, sign-offs, anything.")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $personalStyle)
+                    .font(.system(size: 12))
+                    .frame(height: 90)
+                    .onChange(of: personalStyle) { Settings.shared.personalStyle = personalStyle }
+                Button("Restore default style") {
+                    Settings.shared.personalStyle = Settings.defaultPersonalStyle
+                    personalStyle = Settings.defaultPersonalStyle
+                }
                 Text("Without a provider set up, dictation works fully on-device and nothing ever leaves this Mac.")
                     .font(.caption).foregroundStyle(.secondary)
             }

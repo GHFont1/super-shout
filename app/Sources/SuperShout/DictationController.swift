@@ -153,6 +153,7 @@ final class DictationController {
     private func sessionLabel(for action: KeyAction) -> String {
         switch action {
         case .dictate: return "Listening…"
+        case .aiRewrite: return "AI Rewrite — speak freely, it types it your way…"
         case .aiEdit: return "AI Edit — say what to change…"
         case .aiCompose: return "AI Compose — say what to write…"
         case .off: return ""
@@ -162,6 +163,7 @@ final class DictationController {
     private func accent(for action: KeyAction) -> Color {
         switch action {
         case .dictate: return .orange
+        case .aiRewrite: return .green
         case .aiEdit: return .purple
         case .aiCompose: return .cyan
         case .off: return .orange
@@ -187,6 +189,8 @@ final class DictationController {
             switch action {
             case .dictate, .off:
                 self.finishDictation(raw)
+            case .aiRewrite:
+                self.finishRewrite(raw)
             case .aiEdit, .aiCompose:
                 self.finishAI(raw, action: action)
             }
@@ -233,6 +237,42 @@ final class DictationController {
             }
         } else {
             deliver(cleaned, pressEnter: pressEnter)
+        }
+    }
+
+    /// AI Rewrite: the whole transcript is retyped in the user's voice,
+    /// formatted for the destination. On AI failure the cleaned literal
+    /// dictation is inserted instead — speech is never lost.
+    private func finishRewrite(_ raw: String) {
+        // Keep punctuation so the model sees sentence boundaries; skip local
+        // list formatting — structure is the model's job here.
+        var opts = CleanupEngine.CleanOptions()
+        opts.allowLists = false
+        var cleaned = CleanupEngine.clean(raw, options: opts)
+        var pressEnter = false
+        if Settings.shared.spokenCommands,
+           let r = cleaned.range(of: #"(?i)[,.!?]?\s*\bpress enter\b[.!?]?\s*$"#, options: .regularExpression) {
+            cleaned.removeSubrange(r)
+            cleaned = cleaned.trimmingCharacters(in: .whitespaces)
+            pressEnter = true
+        }
+        guard !cleaned.isEmpty else {
+            state = .idle
+            return
+        }
+        Log.write("rewrite transcript: \"\(cleaned.prefix(80))\" (\(cleaned.count) chars)")
+        hud.showStatus("Rewriting in your voice…")
+        ClaudePolish.rewrite(cleaned, appName: sessionAppName) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                Log.write("rewrite result: \(result.map { "\($0.count) chars" } ?? "FAILED — falling back to literal")")
+                if let result {
+                    self.deliver(result, raw: true, pressEnter: pressEnter)
+                } else {
+                    self.deliver(cleaned, pressEnter: pressEnter)
+                    self.hud.flashInfo("AI unavailable — inserted as spoken")
+                }
+            }
         }
     }
 

@@ -19,6 +19,27 @@ enum ClaudePolish {
         )
     }
 
+    /// AI Rewrite mode: the spoken transcript is retyped as finished writing
+    /// in the user's own voice, formatted for the destination (an email gets
+    /// email structure, a chat message stays a chat message).
+    static func rewrite(_ transcript: String, appName: String? = nil, completion: @escaping (String?) -> Void) {
+        let style = Settings.shared.personalStyle.trimmingCharacters(in: .whitespacesAndNewlines)
+        send(
+            system: "You turn a raw spoken transcript into finished writing in the speaker's own voice. "
+                + "Say everything they meant to say — keep every point, name, number, and commitment — but write it the way they would type it: "
+                + "drop the rambling, false starts, and repeated thoughts, and organize it cleanly. "
+                + "Format for the destination: if it reads as an email, structure it as one (greeting if implied, short paragraphs, sign-off); "
+                + "if it's a chat message or note, keep it as one. Never add facts, opinions, or promises they didn't say. "
+                + "Never use em dashes. Return only the finished text with no preamble and no surrounding quotes."
+                + (style.isEmpty ? "" : "\n\nThe speaker's writing style: \(style)")
+                + appContextLine(appName),
+            user: transcript,
+            maxTokens: 4096,
+            timeout: 25,
+            completion: completion
+        )
+    }
+
     /// AI Edit mode: applies a spoken instruction to the selected text.
     static func transform(selection: String, instruction: String, completion: @escaping (String?) -> Void) {
         send(

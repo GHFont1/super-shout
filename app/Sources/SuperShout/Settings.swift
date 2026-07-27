@@ -17,18 +17,19 @@ enum AIProvider: String, CaseIterable, Codable {
 
 /// What holding a given key does.
 enum KeyAction: String, CaseIterable, Codable {
-    case dictate, aiEdit, aiCompose, off
+    case dictate, aiRewrite, aiEdit, aiCompose, off
 
     var displayName: String {
         switch self {
         case .dictate: return "Dictate"
+        case .aiRewrite: return "AI Rewrite (your voice)"
         case .aiEdit: return "AI Edit Selection"
         case .aiCompose: return "AI Compose"
         case .off: return "Off"
         }
     }
 
-    var needsAPIKey: Bool { self == .aiEdit || self == .aiCompose }
+    var needsAPIKey: Bool { self == .aiRewrite || self == .aiEdit || self == .aiCompose }
 }
 
 enum HoldKey: String, CaseIterable, Codable {
@@ -73,7 +74,8 @@ final class Settings {
     }
 
     /// Per-key mode assignment. Defaults: the legacy dictation hotkey stays
-    /// Dictate; the remaining keys get AI Edit and AI Compose.
+    /// Dictate; the remaining keys get AI Edit and AI Rewrite (Compose stays
+    /// reachable — AI Edit with nothing selected composes).
     func action(for key: HoldKey) -> KeyAction {
         if let stored = (d.dictionary(forKey: "keyActions") as? [String: String])?[key.rawValue],
            let action = KeyAction(rawValue: stored) {
@@ -81,7 +83,7 @@ final class Settings {
         }
         if key == hotkey { return .dictate }
         let remaining = HoldKey.allCases.filter { $0 != hotkey }
-        return key == remaining.first ? .aiEdit : .aiCompose
+        return key == remaining.first ? .aiEdit : .aiRewrite
     }
 
     func setAction(_ action: KeyAction, for key: HoldKey) {
@@ -89,6 +91,22 @@ final class Settings {
         dict[key.rawValue] = action.rawValue
         d.set(dict, forKey: "keyActions")
     }
+
+    /// How AI Rewrite should sound — editable in Settings, sent verbatim to
+    /// the model as the author's style profile.
+    var personalStyle: String {
+        get {
+            let stored = d.string(forKey: "personalStyle") ?? ""
+            return stored.isEmpty ? Settings.defaultPersonalStyle : stored
+        }
+        set { d.set(newValue, forKey: "personalStyle") }
+    }
+
+    static let defaultPersonalStyle = """
+        Short, direct, confident sentences. Plain everyday words, no corporate jargon, no hype. \
+        Never use em dashes or exclamation points. Friendly but efficient — get to the point, \
+        then stop. For emails: brief greeting, tight paragraphs, sign off simply as Benny.
+        """
 
     /// The key currently assigned to plain dictation, for UI copy.
     var dictateKeyDisplay: String {
