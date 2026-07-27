@@ -21,11 +21,20 @@ struct SettingsView: View {
     @State private var soundCues = Settings.shared.soundCues
     @State private var hudPosition = Settings.shared.hudPosition
     @State private var smartEntities = Settings.shared.smartEntities
-    /// Data-driven key rows: one picker per key, bound straight to Settings.
+    /// Local mirror of the key mapping — SwiftUI needs @State to re-render;
+    /// writes flow through to Settings on every change.
+    @State private var keyActions: [HoldKey: KeyAction] = Dictionary(
+        uniqueKeysWithValues: HoldKey.allCases.map { ($0, Settings.shared.action(for: $0)) }
+    )
+
     private func keyRow(_ key: HoldKey) -> some View {
         Picker(key.displayName, selection: Binding(
-            get: { Settings.shared.action(for: key) },
-            set: { Settings.shared.setAction($0, for: key); AppDelegate.shared?.rebuildMenu() }
+            get: { keyActions[key] ?? .off },
+            set: { newValue in
+                keyActions[key] = newValue
+                Settings.shared.setAction(newValue, for: key)
+                AppDelegate.shared?.rebuildMenu()
+            }
         )) {
             ForEach(KeyAction.allCases, id: \.self) { Text($0.displayName).tag($0) }
         }
