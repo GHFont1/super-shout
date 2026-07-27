@@ -54,9 +54,38 @@ final class Settings {
         set { d.set(newValue, forKey: "aiPolishEnabled") }
     }
 
+    var smartEntities: Bool {
+        get { d.object(forKey: "smartEntities") as? Bool ?? true }
+        set { d.set(newValue, forKey: "smartEntities") }
+    }
+
+    var totalWordsDictated: Int {
+        get { d.integer(forKey: "totalWordsDictated") }
+        set { d.set(newValue, forKey: "totalWordsDictated") }
+    }
+
+    /// Recent transcripts, persisted so history survives restarts.
+    var historyStore: [String] {
+        get { (d.array(forKey: "historyStore") as? [String]) ?? [] }
+        set { d.set(newValue, forKey: "historyStore") }
+    }
+
+    /// Stored in the Keychain, never in plaintext UserDefaults. Reads migrate
+    /// any legacy UserDefaults value once, then remove it.
     var anthropicAPIKey: String {
-        get { d.string(forKey: "anthropicAPIKey") ?? "" }
-        set { d.set(newValue, forKey: "anthropicAPIKey") }
+        get {
+            if let key = Keychain.get("anthropicAPIKey") { return key }
+            if let legacy = d.string(forKey: "anthropicAPIKey"), !legacy.isEmpty {
+                Keychain.set("anthropicAPIKey", legacy)
+                d.removeObject(forKey: "anthropicAPIKey")
+                return legacy
+            }
+            return ""
+        }
+        set {
+            Keychain.set("anthropicAPIKey", newValue)
+            d.removeObject(forKey: "anthropicAPIKey")
+        }
     }
 
     var polishModel: String {

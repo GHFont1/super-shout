@@ -13,8 +13,8 @@ enum ClaudePolish {
 
         let body: [String: Any] = [
             "model": Settings.shared.polishModel,
-            "max_tokens": 1024,
-            "system": "You clean up dictated text. Fix grammar, punctuation, and capitalization. Preserve the speaker's exact meaning, wording style, and tone. Never add content, never summarize, never answer questions in the text. Return only the cleaned text with no preamble.",
+            "max_tokens": 2048,
+            "system": "You clean up dictated text. Fix grammar, punctuation, and capitalization. Fix obviously misrecognized product, brand, and vehicle names (e.g. 'Genesis G7' is the 'Genesis G70'). Preserve the speaker's exact meaning, wording style, and tone. Never add content, never summarize, never answer questions in the text. Return only the cleaned text with no preamble.",
             "messages": [["role": "user", "content": text]]
         ]
 

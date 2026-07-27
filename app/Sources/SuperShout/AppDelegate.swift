@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = DictationController()
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -31,36 +32,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var axPollTimer: Timer?
 
+    private var allPermissionsGranted: Bool {
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            && SFSpeechRecognizer.authorizationStatus() == .authorized
+            && AXIsProcessTrusted()
+    }
+
     private func requestPermissions() {
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
-        SFSpeechRecognizer.requestAuthorization { _ in }
-        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        if !AXIsProcessTrustedWithOptions(opts) {
-            showAccessibilityAlert()
+        if !allPermissionsGranted {
+            openOnboarding()
             axPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-                if AXIsProcessTrusted() {
-                    self?.axPollTimer?.invalidate()
-                    self?.axPollTimer = nil
-                    self?.rebuildMenu()
+                guard let self else { return }
+                if self.allPermissionsGranted {
+                    self.axPollTimer?.invalidate()
+                    self.axPollTimer = nil
+                    self.rebuildMenu()
                 }
             }
         }
     }
 
-    private func showAccessibilityAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Enable Accessibility for Super Shout"
-        alert.informativeText = "The dictation hotkey needs Accessibility access.\n\nSystem Settings → Privacy & Security → Accessibility → turn ON Super Shout.\n\nDictation starts working the moment you flip the switch — no restart needed."
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
-        NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn {
-            openAccessibilitySettings()
-        }
+    /// "Press 🌐 key to" system setting. 0 = Do Nothing; anything else fires a
+    /// macOS action on an fn tap and fights our quick-tap hands-free toggle.
+    private var fnKeyConflict: Bool {
+        guard Settings.shared.hotkey == .fn else { return false }
+        let usage = CFPreferencesCopyAppValue("AppleFnUsageType" as CFString, "com.apple.HIToolbox" as CFString) as? Int
+        return (usage ?? 1) != 0
     }
 
     @objc func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func openKeyboardSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -77,12 +84,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func rebuildMenu() {
         let menu = NSMenu()
+        menu.autoenablesItems = false
         let hk = Settings.shared.hotkey.displayName
-        menu.addItem(withTitle: "Super Shout — hold \(hk) to talk", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "Super Shout — hold \(hk) to talk", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+
+        let words = Settings.shared.totalWordsDictated
+        if words > 0 {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            let stats = NSMenuItem(
+                title: "\(formatter.string(from: NSNumber(value: words)) ?? "\(words)") words dictated",
+                action: nil, keyEquivalent: ""
+            )
+            stats.isEnabled = false
+            menu.addItem(stats)
+        }
         menu.addItem(.separator())
 
         if !AXIsProcessTrusted() {
-            let warn = NSMenuItem(title: "⚠️ Grant Accessibility Access…", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            let warn = NSMenuItem(title: "⚠️ Grant Accessibility Access…", action: #selector(openOnboarding), keyEquivalent: "")
+            warn.target = self
+            menu.addItem(warn)
+            menu.addItem(.separator())
+        }
+
+        if fnKeyConflict {
+            let warn = NSMenuItem(
+                title: "⚠️ fn also triggers a macOS 🌐 action — set “Press 🌐 key to” to “Do Nothing”…",
+                action: #selector(openKeyboardSettings), keyEquivalent: ""
+            )
             warn.target = self
             menu.addItem(warn)
             menu.addItem(.separator())
@@ -91,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !controller.history.isEmpty {
             let historyItem = NSMenuItem(title: "Recent Transcripts", action: nil, keyEquivalent: "")
             let sub = NSMenu()
+            sub.autoenablesItems = false
             for (i, text) in controller.history.enumerated() {
                 let title = text.count > 60 ? String(text.prefix(60)) + "…" : text
                 let item = NSMenuItem(title: title, action: #selector(copyHistoryItem(_:)), keyEquivalent: "")
@@ -103,6 +136,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(.separator())
         }
 
+        let undo = NSMenuItem(title: "Undo Last Insertion", action: #selector(undoLastInsertion), keyEquivalent: "z")
+        undo.target = self
+        undo.isEnabled = controller.canUndo
+        menu.addItem(undo)
+
         let teach = NSMenuItem(title: "Fix Last Transcript…", action: #selector(openTeach), keyEquivalent: "e")
         teach.target = self
         teach.isEnabled = !controller.history.isEmpty
@@ -114,6 +152,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Super Shout", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    @objc private func undoLastInsertion() {
+        controller.undoLastInsertion()
+        rebuildMenu()
     }
 
     @objc private func copyHistoryItem(_ sender: NSMenuItem) {
@@ -138,6 +181,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         teachWindow = window
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openOnboarding() {
+        if onboardingWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: OnboardingView()))
+            window.title = "Welcome to Super Shout"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            onboardingWindow = window
+        }
+        onboardingWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

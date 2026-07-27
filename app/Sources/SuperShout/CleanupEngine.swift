@@ -10,7 +10,16 @@ enum CleanupEngine {
         #"(?i)\b(like,)\s+"#
     ]
 
-    static func clean(_ input: String) -> String {
+    /// Where the text is going changes what "clean" means: search queries
+    /// aren't sentences, and terminals need literal text.
+    struct CleanOptions {
+        var allowTerminalPunctuation = true
+        var allowLists = true
+        var stripTrailingPeriod = false
+        static let standard = CleanOptions()
+    }
+
+    static func clean(_ input: String, options: CleanOptions = .standard) -> String {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return text }
 
@@ -39,8 +48,18 @@ enum CleanupEngine {
             text = first.uppercased() + text.dropFirst()
         }
 
-        if Settings.shared.autoPunctuate { text = ensureTerminalPunctuation(text) }
-        if Settings.shared.smartLists { text = ListFormatter.formatLists(in: text) }
+        // Domain smarts: "2019 Genesis G7" → "2019 Genesis G70".
+        if Settings.shared.smartEntities { text = EntityCorrector.correct(text) }
+
+        if Settings.shared.autoPunctuate && options.allowTerminalPunctuation {
+            text = ensureTerminalPunctuation(text)
+        }
+        if Settings.shared.smartLists && options.allowLists {
+            text = ListFormatter.formatLists(in: text)
+        }
+        if options.stripTrailingPeriod, text.hasSuffix("."), !text.hasSuffix("..") {
+            text = String(text.dropLast())
+        }
 
         return text
     }

@@ -9,7 +9,14 @@ enum DictationState {
 /// Coordinates hotkey → record → transcribe → clean → insert.
 final class DictationController {
     var onStateChange: ((DictationState) -> Void)?
-    private(set) var history: [String] = []
+    private(set) var history: [String] = Settings.shared.historyStore
+
+    /// Apps where dictation must stay literal: no auto-punctuation or list
+    /// formatting in a shell prompt.
+    private static let codeSafeApps: Set<String> = [
+        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp",
+        "net.kovidgoyal.kitty", "com.github.wez.wezterm"
+    ]
 
     private let hotkey = HotkeyManager()
     private var transcriber: Transcriber?
@@ -20,11 +27,34 @@ final class DictationController {
     }
     private var handsFreeActive = false
 
+    var canUndo: Bool { injector.lastInserted != nil }
+
     func start() {
         hotkey.onPress = { [weak self] in self?.beginListening(handsFree: false) }
         hotkey.onRelease = { [weak self] in self?.endListening() }
         hotkey.onQuickTap = { [weak self] in self?.toggleHandsFree() }
+        hotkey.onEscape = { [weak self] in self?.cancelListening() }
+        hotkey.isListening = { [weak self] in
+            if case .listening = self?.state { return true }
+            return false
+        }
         hotkey.start()
+    }
+
+    /// Aborts the current dictation without inserting anything (Esc).
+    func cancelListening() {
+        guard case .listening = state else { return }
+        transcriber?.cancel()
+        transcriber = nil
+        handsFreeActive = false
+        state = .idle
+        hud.flashDone("Canceled")
+        NSLog("SuperShout: dictation canceled")
+    }
+
+    /// Deletes the most recent insertion from the focused field.
+    func undoLastInsertion() {
+        injector.undoLastInsertion()
     }
 
     private func toggleHandsFree() {
@@ -69,7 +99,7 @@ final class DictationController {
         t.finish { [weak self] raw in
             guard let self else { return }
             self.transcriber = nil
-            let cleaned = CleanupEngine.clean(raw)
+            let cleaned = CleanupEngine.clean(raw, options: self.currentCleanOptions())
             NSLog("SuperShout: transcript=\"\(cleaned)\"")
             guard !cleaned.isEmpty else {
                 self.state = .idle
@@ -85,10 +115,26 @@ final class DictationController {
         }
     }
 
+    /// Tailors cleanup to where the text is going: search fields get no
+    /// terminal period (queries aren't sentences), terminals get literal text.
+    private func currentCleanOptions() -> CleanupEngine.CleanOptions {
+        var opts = CleanupEngine.CleanOptions()
+        let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+        let codeSafe = Self.codeSafeApps.contains(bundleID)
+        let searchField = ContextReader.isSearchFieldFocused()
+        opts.allowTerminalPunctuation = !searchField && !codeSafe
+        opts.allowLists = !searchField && !codeSafe
+        opts.stripTrailingPeriod = searchField
+        return opts
+    }
+
     private func deliver(_ text: String) {
         history.insert(text, at: 0)
         if history.count > 10 { history.removeLast() }
+        Settings.shared.historyStore = history
+        Settings.shared.totalWordsDictated += text.split(whereSeparator: \.isWhitespace).count
         injector.insert(text)
         state = .idle
+        hud.flashDone("Inserted")
     }
 }

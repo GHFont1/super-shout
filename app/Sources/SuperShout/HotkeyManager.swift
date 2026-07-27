@@ -2,10 +2,14 @@ import AppKit
 
 /// Listens for the configured hold-key globally via a CGEvent tap.
 /// Hold = push-to-talk. Quick tap (< 0.35 s) toggles hands-free lock.
+/// While dictation is live, Esc cancels it (and is swallowed so the
+/// frontmost app never sees the keypress).
 final class HotkeyManager {
     var onPress: (() -> Void)?
     var onRelease: (() -> Void)?
     var onQuickTap: (() -> Void)?
+    var onEscape: (() -> Void)?
+    var isListening: (() -> Bool)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -30,11 +34,19 @@ final class HotkeyManager {
 
     private func attemptStart() {
         guard eventTap == nil else { return }
-        let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
+        let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon!).takeUnretainedValue()
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 if let tap = manager.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+                return Unmanaged.passUnretained(event)
+            }
+            if type == .keyDown {
+                let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keyCode == 53, manager.isListening?() == true {  // Esc cancels dictation
+                    DispatchQueue.main.async { manager.onEscape?() }
+                    return nil  // swallow so the focused app doesn't also react
+                }
                 return Unmanaged.passUnretained(event)
             }
             manager.handleFlagsChanged(event)

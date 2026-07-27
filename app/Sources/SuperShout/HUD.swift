@@ -10,11 +10,9 @@ final class HUDController {
     func update(for state: DictationState) {
         switch state {
         case .idle:
-            model.statusText = "Inserted"
-            model.mode = .done
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-                if self?.model.mode == .done { self?.hide() }
-            }
+            // Success/cancel flashes are triggered explicitly via flashDone;
+            // a bare return to idle (e.g. empty transcript) just hides.
+            if model.mode == .listening || model.mode == .processing { hide() }
         case .listening(let handsFree):
             model.reset()
             model.mode = .listening
@@ -29,6 +27,15 @@ final class HUDController {
     func pushLevel(_ level: Float) { model.pushLevel(level) }
     func showPartial(_ text: String) { model.partialText = text }
 
+    func flashDone(_ message: String) {
+        model.mode = .done
+        model.statusText = message
+        show()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+            if self?.model.mode == .done { self?.hide() }
+        }
+    }
+
     func flashError(_ message: String) {
         model.mode = .error
         model.statusText = message
@@ -38,6 +45,12 @@ final class HUDController {
 
     private func show() {
         if panel == nil { buildPanel() }
+        // Re-center every time — the main screen may have changed since the
+        // panel was built (display plugged/unplugged, resolution change).
+        if let panel, let screen = NSScreen.main {
+            let f = screen.visibleFrame
+            panel.setFrameOrigin(NSPoint(x: f.midX - panel.frame.width / 2, y: f.minY + 24))
+        }
         panel?.orderFrontRegardless()
     }
 

@@ -1,2 +1,6 @@
 # Local Netlify folder
 .netlify
+
+# Build artifacts
+app/.build/
+app/build/

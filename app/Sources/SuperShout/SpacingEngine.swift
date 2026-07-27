@@ -23,6 +23,11 @@ enum SpacingEngine {
         where replacement.split(separator: " ").first.map(String.init) == word {
             return true
         }
+        // Vocabulary terms (Duoplane, Shopify…) are proper nouns too
+        for term in Settings.shared.vocabulary
+        where term.split(separator: " ").first.map(String.init) == word {
+            return true
+        }
         return false
     }
 

@@ -49,6 +49,21 @@ enum ContextReader {
         focusedTextElement() != nil
     }
 
+    /// True when the focused element is a search field (or a browser's
+    /// address-and-search bar). Dictated search queries shouldn't end with a
+    /// period — "brakes and rotors." makes for a worse query.
+    static func isSearchFieldFocused() -> Bool {
+        guard let element = focusedTextElement() else { return false }
+        for attribute in [kAXSubroleAttribute, kAXRoleAttribute, kAXRoleDescriptionAttribute] {
+            var value: AnyObject?
+            if AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
+               let s = value as? String, s.lowercased().contains("search") {
+                return true
+            }
+        }
+        return false
+    }
+
     private static func focusedTextElement() -> AXUIElement? {
         let system = AXUIElementCreateSystemWide()
         var focused: AnyObject?

@@ -5,10 +5,12 @@ import Carbon.HIToolbox
 /// clipboard, synthesizing ⌘V, then restoring the previous clipboard.
 final class TextInjector {
     private var lastInsertionAt: Date?
+    private(set) var lastInserted: String?
 
     func insert(_ rawText: String) {
         let text = Settings.shared.smartSpacing ? joinWithContext(rawText) : rawText
         lastInsertionAt = Date()
+        lastInserted = text
         let pb = NSPasteboard.general
         let savedItems = pb.pasteboardItems?.compactMap { item -> [NSPasteboard.PasteboardType: Data]? in
             var copy: [NSPasteboard.PasteboardType: Data] = [:]
@@ -58,6 +60,21 @@ final class TextInjector {
         }
 
         return SpacingEngine.join(text, after: previous)
+    }
+
+    /// Removes the most recent insertion by sending one backspace per
+    /// character. Works anywhere the paste worked.
+    func undoLastInsertion() {
+        guard let text = lastInserted else { return }
+        lastInserted = nil
+        let count = min(text.count, 1000)
+        let source = CGEventSource(stateID: .combinedSessionState)
+        for _ in 0..<count {
+            let down = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Delete), keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Delete), keyDown: false)
+            down?.post(tap: .cgSessionEventTap)
+            up?.post(tap: .cgSessionEventTap)
+        }
     }
 
     private func pasteKeystroke() {

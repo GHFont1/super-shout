@@ -1,6 +1,9 @@
 import SwiftUI
+import ServiceManagement
 
 struct SettingsView: View {
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var smartEntities = Settings.shared.smartEntities
     @State private var hotkey = Settings.shared.hotkey
     @State private var removeFillers = Settings.shared.removeFillers
     @State private var language = Settings.shared.language
@@ -22,8 +25,19 @@ struct SettingsView: View {
                     ForEach(HoldKey.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .onChange(of: hotkey) { Settings.shared.hotkey = hotkey; AppDelegate.shared?.rebuildMenu() }
-                Text("Hold the key and speak; release to insert. Quick-tap to lock hands-free, tap again to finish.")
+                Text("Hold the key and speak; release to insert. Quick-tap to lock hands-free, tap again to finish. Esc cancels.")
                     .font(.caption).foregroundStyle(.secondary)
+
+                Toggle("Start Super Shout at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) {
+                        do {
+                            if launchAtLogin { try SMAppService.mainApp.register() }
+                            else { try SMAppService.mainApp.unregister() }
+                        } catch {
+                            NSLog("SuperShout: launch-at-login change failed — \(error.localizedDescription)")
+                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                        }
+                    }
             }
 
             Section("Transcription") {
@@ -53,6 +67,11 @@ struct SettingsView: View {
                 Toggle("Turn spoken lists into bullets", isOn: $smartLists)
                     .onChange(of: smartLists) { Settings.shared.smartLists = smartLists }
                 Text("\"I need eggs, milk, and bread\" becomes a bulleted list of three items.")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Toggle("Fix product and vehicle names", isOn: $smartEntities)
+                    .onChange(of: smartEntities) { Settings.shared.smartEntities = smartEntities }
+                Text("\"2019 Genesis G7\" becomes \"2019 Genesis G70\" — near-miss model names snap to the real one.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
