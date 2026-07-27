@@ -4,3 +4,7 @@
 # Build artifacts
 app/.build/
 app/build/
+
+# iOS generated project & build
+ios/SuperShoutiOS.xcodeproj/
+ios/DerivedData/

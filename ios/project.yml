@@ -1,0 +1,59 @@
+name: SuperShoutiOS
+options:
+  bundleIdPrefix: com.gca
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  DEVELOPMENT_TEAM: YGAL5625KC
+  SWIFT_VERSION: "5.9"
+targets:
+  SuperShout:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: ../app/Sources/SuperShout/Settings.swift
+      - path: ../app/Sources/SuperShout/Keychain.swift
+      - path: ../app/Sources/SuperShout/Log.swift
+      - path: ../app/Sources/SuperShout/CleanupEngine.swift
+      - path: ../app/Sources/SuperShout/EntityCorrector.swift
+      - path: ../app/Sources/SuperShout/SpacingEngine.swift
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.gca.supershout.ios
+      TARGETED_DEVICE_FAMILY: "1"
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_NSMicrophoneUsageDescription: "Super Shout listens while you dictate so it can transcribe your speech."
+      INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Super Shout transcribes your speech on-device to type for you."
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
+      INFOPLIST_KEY_CFBundleDisplayName: "Super Shout"
+    dependencies:
+      - target: SuperShoutKeyboard
+        embed: true
+  SuperShoutKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Keyboard
+      - path: ../app/Sources/SuperShout/Settings.swift
+      - path: ../app/Sources/SuperShout/Keychain.swift
+      - path: ../app/Sources/SuperShout/Log.swift
+      - path: ../app/Sources/SuperShout/CleanupEngine.swift
+      - path: ../app/Sources/SuperShout/EntityCorrector.swift
+      - path: ../app/Sources/SuperShout/SpacingEngine.swift
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.gca.supershout.ios.keyboard
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_CFBundleDisplayName: "Super Shout"
+      INFOPLIST_KEY_NSMicrophoneUsageDescription: "Super Shout listens while you dictate so it can transcribe your speech."
+      INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Super Shout transcribes your speech on-device to type for you."
+    info:
+      path: Keyboard/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+            IsASCIICapable: false
+            PrefersRightToLeft: false

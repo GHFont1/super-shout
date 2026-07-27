@@ -4,8 +4,15 @@ import Foundation
 /// app is effectively invisible in the unified log, and dictation bugs need
 /// a traceable timeline.
 enum Log {
-    private static let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Logs/SuperShout.log")
+    private static let url: URL = {
+        #if os(macOS)
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/SuperShout.log")
+        #else
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SuperShout.log")
+        #endif
+    }()
     private static let queue = DispatchQueue(label: "supershout.log")
     private static let stamp: DateFormatter = {
         let f = DateFormatter()
