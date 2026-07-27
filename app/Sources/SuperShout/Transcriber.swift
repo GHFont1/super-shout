@@ -4,9 +4,11 @@ import Speech
 /// Streams microphone audio into SFSpeechRecognizer (on-device when available)
 /// and reports live audio levels for the HUD waveform.
 ///
-/// SFSpeechRecognizer stops delivering results after roughly a minute, so the
-/// recognition task is rotated every 50 s and the segments are stitched back
-/// together — long hands-free dictations no longer get truncated.
+/// SFSpeechRecognizer stops delivering results after roughly a minute, so a
+/// fresh recognition task takes over every 45 s while the audio engine keeps
+/// running. Each task writes into its own generation slot and is allowed to
+/// finalize naturally after handoff — no cancel race, no words lost at the
+/// seam, no length limit.
 final class Transcriber: NSObject {
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
@@ -15,8 +17,12 @@ final class Transcriber: NSObject {
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
-    private var latestTranscript = ""
-    private var completedSegments: [String] = []
+
+    /// generation → best transcript for that task, assembled in order.
+    private var segments: [Int: String] = [:]
+    private var generation = 0
+    /// Old tasks kept alive until they deliver their final result.
+    private var retiredTasks: [SFSpeechRecognitionTask] = []
 
     private var rotationTimer: Timer?
     private var finishing = false
@@ -24,8 +30,9 @@ final class Transcriber: NSObject {
     private var fallbackWorkItem: DispatchWorkItem?
 
     func begin() throws {
-        latestTranscript = ""
-        completedSegments = []
+        segments = [:]
+        generation = 0
+        retiredTasks = []
         finishing = false
         let locale = Locale(identifier: Settings.shared.language)
         recognizer = SFSpeechRecognizer(locale: locale)
@@ -45,16 +52,21 @@ final class Transcriber: NSObject {
         engine.prepare()
         try engine.start()
 
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: 50, repeats: true) { [weak self] _ in
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
             self?.rotateRecognitionTask()
         }
     }
 
     private func startRecognitionTask() {
         guard let recognizer else { return }
+        generation += 1
+        let gen = generation
+        segments[gen] = ""
+
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
+        request.taskHint = .dictation
         // Bias recognition toward the user's own vocabulary (UPC, ASIN, brand names…)
         request.contextualStrings = Array(Settings.shared.contextualStrings.prefix(200))
         if recognizer.supportsOnDeviceRecognition {
@@ -64,33 +76,43 @@ final class Transcriber: NSObject {
 
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
-            if let result {
-                self.latestTranscript = result.bestTranscription.formattedString
-                self.onPartial?(self.assembledTranscript())
-                if result.isFinal, self.finishing {
-                    self.completeFinish()
+            DispatchQueue.main.async {
+                if let result {
+                    self.segments[gen] = result.bestTranscription.formattedString
+                    self.onPartial?(self.assembledTranscript())
+                    if result.isFinal {
+                        self.reapRetiredTasks()
+                        if self.finishing, gen == self.generation { self.completeFinish() }
+                    }
+                } else if error != nil {
+                    self.reapRetiredTasks()
+                    if self.finishing, gen == self.generation { self.completeFinish() }
                 }
-            } else if error != nil, self.finishing {
-                self.completeFinish()
             }
         }
     }
 
-    /// Seals the current segment and starts a fresh recognition task while the
-    /// audio engine keeps running, sidestepping the ~1 min recognition limit.
+    /// Hands the audio stream to a fresh recognition task before the current
+    /// one hits the ~1 min ceiling. The outgoing task keeps running on the
+    /// audio it already has and finalizes its own segment.
     private func rotateRecognitionTask() {
         guard !finishing else { return }
-        if !latestTranscript.isEmpty {
-            completedSegments.append(latestTranscript)
-            latestTranscript = ""
-        }
-        request?.endAudio()
-        task?.cancel()
+        let outgoingRequest = request
+        if let outgoing = task { retiredTasks.append(outgoing) }
+        // New task first: the tap's `self?.request` now feeds the new request,
+        // so no buffers fall between the two.
         startRecognitionTask()
+        outgoingRequest?.endAudio()
+        NSLog("SuperShout: rotated recognition task (generation \(generation))")
+    }
+
+    private func reapRetiredTasks() {
+        retiredTasks.removeAll { $0.state == .completed || $0.state == .canceling }
     }
 
     private func assembledTranscript() -> String {
-        (completedSegments + [latestTranscript])
+        segments.sorted { $0.key < $1.key }
+            .map(\.value)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
@@ -120,6 +142,8 @@ final class Transcriber: NSObject {
             self.task?.cancel()
             self.task = nil
             self.request = nil
+            self.retiredTasks.forEach { $0.cancel() }
+            self.retiredTasks = []
             completion(self.assembledTranscript())
         }
     }
@@ -137,8 +161,9 @@ final class Transcriber: NSObject {
         task?.cancel()
         task = nil
         request = nil
-        latestTranscript = ""
-        completedSegments = []
+        retiredTasks.forEach { $0.cancel() }
+        retiredTasks = []
+        segments = [:]
     }
 
     private func reportLevel(_ buffer: AVAudioPCMBuffer) {
