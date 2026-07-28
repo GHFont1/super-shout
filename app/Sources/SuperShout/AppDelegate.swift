@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import AVFoundation
 import Speech
+import Sparkle
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate!
@@ -10,9 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+    private var historyWindow: NSWindow?
+    private var diagnosticWindow: NSWindow?
+    private var updaterController: SPUStandardUpdaterController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "megaphone.fill", accessibilityDescription: "Super Shout")
@@ -28,11 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         requestPermissions()
         controller.start()
-
-        // Quiet update check shortly after launch, then daily.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { UpdateChecker.check() }
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { _ in
-            UpdateChecker.check()
+        Transcriber.prepareModernEngine()
+        NotificationCenter.default.addObserver(forName: .superShoutHistoryChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.rebuildMenu()
         }
 
         // Voice Tutor studies recent dictation in the background (≤ every 6 h).
@@ -44,10 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var tutorTimer: Timer?
 
-    private var updateTimer: Timer?
-
     @objc private func checkForUpdates() {
-        UpdateChecker.check(verbose: true)
+        updaterController.checkForUpdates(nil)
     }
 
     private var axPollTimer: Timer?
@@ -166,6 +167,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             warn.target = self
             menu.addItem(warn)
         }
+
+        menu.addItem(.separator())
+
+        let meeting = NSMenuItem(title: "Start Meeting Transcription…", action: #selector(openMeeting), keyEquivalent: "")
+        meeting.image = menuSymbol("person.2.wave.2")
+        meeting.target = self
+        menu.addItem(meeting)
+
+        let allHistory = NSMenuItem(title: "Transcript Library…", action: #selector(openHistory), keyEquivalent: "")
+        allHistory.image = menuSymbol("books.vertical")
+        allHistory.target = self
+        menu.addItem(allHistory)
+
+        let micTest = NSMenuItem(title: "Test Microphone…", action: #selector(openDiagnostic), keyEquivalent: "")
+        micTest.image = menuSymbol("mic.and.signal.meter")
+        micTest.target = self
+        menu.addItem(micTest)
 
         menu.addItem(.separator())
 
@@ -290,5 +308,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openHistory() {
+        if historyWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: TranscriptHistoryView()))
+            window.title = "Transcript Library"
+            window.styleMask = [.titled, .closable, .resizable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            historyWindow = window
+        }
+        historyWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openDiagnostic() {
+        if diagnosticWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: MicrophoneDiagnosticView()))
+            window.title = "Microphone Check"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            diagnosticWindow = window
+        }
+        diagnosticWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openMeeting() {
+        MeetingWindowController.shared.show()
     }
 }

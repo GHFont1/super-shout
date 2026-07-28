@@ -16,6 +16,9 @@ enum CleanupEngine {
         var allowTerminalPunctuation = true
         var allowLists = true
         var stripTrailingPeriod = false
+        var removeFillers: Bool? = nil
+        var autoPunctuate: Bool? = nil
+        var smartLists: Bool? = nil
         static let standard = CleanOptions()
     }
 
@@ -23,7 +26,7 @@ enum CleanupEngine {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return text }
 
-        if Settings.shared.removeFillers {
+        if options.removeFillers ?? Settings.shared.removeFillers {
             for pattern in fillerPatterns {
                 text = text.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
             }
@@ -55,10 +58,10 @@ enum CleanupEngine {
         // Domain smarts: "2019 Genesis G7" → "2019 Genesis G70".
         if Settings.shared.smartEntities { text = EntityCorrector.correct(text) }
 
-        if Settings.shared.autoPunctuate && options.allowTerminalPunctuation {
+        if (options.autoPunctuate ?? Settings.shared.autoPunctuate) && options.allowTerminalPunctuation {
             text = ensureTerminalPunctuation(text)
         }
-        if Settings.shared.smartLists && options.allowLists {
+        if (options.smartLists ?? Settings.shared.smartLists) && options.allowLists {
             text = ListFormatter.formatLists(in: text)
         }
         if options.stripTrailingPeriod, text.hasSuffix("."), !text.hasSuffix("..") {

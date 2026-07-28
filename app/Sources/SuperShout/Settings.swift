@@ -358,6 +358,30 @@ final class Settings {
         set { d.set(newValue, forKey: "enhanceQuietAudio") }
     }
 
+    var speechEngine: SpeechEngineChoice {
+        get { SpeechEngineChoice(rawValue: d.string(forKey: "speechEngine") ?? "") ?? .automatic }
+        set { d.set(newValue.rawValue, forKey: "speechEngine") }
+    }
+
+    var voiceSnippets: [VoiceSnippet] {
+        get { decode([VoiceSnippet].self, key: "voiceSnippets") ?? [] }
+        set { encode(newValue, key: "voiceSnippets") }
+    }
+
+    var appModes: [AppMode] {
+        get { decode([AppMode].self, key: "appModes") ?? AppMode.builtIns }
+        set { encode(newValue, key: "appModes") }
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, key: String) -> T? {
+        guard let data = d.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    private func encode<T: Encodable>(_ value: T, key: String) {
+        if let data = try? JSONEncoder().encode(value) { d.set(data, forKey: key) }
+    }
+
     // Personal dictionary: spoken (case-insensitive) -> replacement
     var dictionary: [String: String] {
         get { (d.dictionary(forKey: "personalDictionary") as? [String: String]) ?? [:] }

@@ -5,6 +5,28 @@ import Foundation
 /// and an AI mode is used.
 enum ClaudePolish {
 
+    static func summarizeMeeting(_ transcript: String, completion: @escaping (String?) -> Void) {
+        send(
+            system: "Summarize this meeting transcript accurately. Return concise Markdown with these headings: Summary, Decisions, Action Items, Open Questions. Under Action Items use checkboxes and name an owner and due date only when the transcript states one. Do not invent facts. The transcript labels the local microphone as You and all remote/system audio as Computer audio.",
+            user: transcript,
+            maxTokens: 4096,
+            timeout: 90,
+            engine: .auto,
+            completion: completion
+        )
+    }
+
+    static func recallHistory(question: String, context: String, completion: @escaping (String?) -> Void) {
+        send(
+            system: "Answer the user's question using only their Super Shout transcript history below. Cite the transcript date for each claim when available. If the history does not contain the answer, say so plainly. Keep the answer concise.\n\nTRANSCRIPT HISTORY:\n\(context)",
+            user: question,
+            maxTokens: 2048,
+            timeout: 60,
+            engine: .auto,
+            completion: completion
+        )
+    }
+
     /// Grammar/entity polish of a dictated transcript (used by the Dictate
     /// mode when "Polish transcripts" is on).
     static func polish(_ text: String, appName: String? = nil, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {

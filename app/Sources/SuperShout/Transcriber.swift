@@ -10,7 +10,7 @@ import Speech
 /// current task ends for any reason mid-dictation (rotation, pause
 /// finalization, error, audio-route change), a fresh task takes over and the
 /// finished segment is kept. Segments only ever accumulate.
-final class Transcriber: NSObject {
+final class LegacyTranscriber: NSObject, SpeechTranscribing {
     var onPartial: ((String) -> Void)?
     var onLevel: ((Float) -> Void)?
 
