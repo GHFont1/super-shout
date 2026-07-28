@@ -40,7 +40,9 @@ final class DictationController {
     private var sessionApp: String?
     /// Human-readable app name at session start, given to the AI as context.
     private var sessionAppName: String?
+    private var sessionMode: AppMode?
     private var listenStartedAt: Date?
+    private var sessionDuration: TimeInterval?
 
     var canUndo: Bool { injector.lastInserted != nil }
 
@@ -125,6 +127,8 @@ final class DictationController {
         capturedSelection = nil
         sessionApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         sessionAppName = NSWorkspace.shared.frontmostApplication?.localizedName
+        sessionMode = AppModeResolver.resolve(bundleIdentifier: sessionApp, modes: Settings.shared.appModes)
+        if let sessionMode { Log.write("automatic mode: \(sessionMode.name) for \(sessionApp ?? "?")") }
         if action == .aiEdit || action == .aiAgent || action == .aiAsk {
             // Grab the selection now, while it's still highlighted; dictation
             // runs concurrently with the (possibly async) capture.
@@ -198,7 +202,8 @@ final class DictationController {
         handsFreeActive = false
         SoundCue.listenStop.play()
         if let started = listenStartedAt {
-            Settings.shared.totalSecondsDictated += Date().timeIntervalSince(started)
+            sessionDuration = Date().timeIntervalSince(started)
+            Settings.shared.totalSecondsDictated += sessionDuration ?? 0
             listenStartedAt = nil
         }
         state = .processing
@@ -224,7 +229,8 @@ final class DictationController {
     }
 
     private func finishDictation(_ raw: String) {
-        var cleaned = CleanupEngine.clean(raw, options: currentCleanOptions())
+        let expanded = SnippetExpander.expand(raw, snippets: Settings.shared.voiceSnippets)
+        var cleaned = CleanupEngine.clean(expanded, options: currentCleanOptions())
         // Spoken "press enter" at the end sends the message after inserting —
         // chat boxes, terminal prompts, AI chats.
         var pressEnter = false
@@ -242,7 +248,8 @@ final class DictationController {
             if pressEnter { hud.flashDone("Sent") }
             return
         }
-        if Settings.shared.aiPolishEnabled, ClaudePolish.isConfigured {
+        let shouldPolish = sessionMode?.aiPolish ?? Settings.shared.aiPolishEnabled
+        if shouldPolish, ClaudePolish.isConfigured {
             hud.showStatus("Polishing…")
             // Polish must never make dictation feel slow: if it hasn't come
             // back in 5 s, insert the local cleanup and drop the late result.
@@ -301,6 +308,7 @@ final class DictationController {
                     self.history.insert(result, at: 0)
                     if self.history.count > 25 { self.history.removeLast() }
                     Settings.shared.historyStore = self.history
+                    TranscriptHistory.shared.add(TranscriptRecord(text: result, rawText: instruction, kind: .research, appName: self.sessionAppName, bundleIdentifier: self.sessionApp, modeName: self.sessionMode?.name, duration: self.sessionDuration))
                     self.injector.copyOnly(result)
                     SoundCue.listenStop.play()
                     self.hud.flashInfo("Deep research done — result copied, press ⌘V (also in Recent Transcripts)")
@@ -343,6 +351,7 @@ final class DictationController {
                     self.history.insert(report, at: 0)
                     if self.history.count > 25 { self.history.removeLast() }
                     Settings.shared.historyStore = self.history
+                    TranscriptHistory.shared.add(TranscriptRecord(text: report, rawText: instruction, kind: .action, appName: self.sessionAppName, bundleIdentifier: self.sessionApp, modeName: self.sessionMode?.name, duration: self.sessionDuration))
                     SoundCue.listenStop.play()
                     self.hud.flashInfo("Done: \(report.prefix(90))")
                 } else {
@@ -449,8 +458,13 @@ final class DictationController {
         let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         let codeSafe = Self.codeSafeApps.contains(bundleID)
         let searchField = ContextReader.isSearchFieldFocused()
-        opts.allowTerminalPunctuation = !searchField
-        opts.allowLists = !searchField && !codeSafe
+        let punctuate = sessionMode?.autoPunctuate ?? Settings.shared.autoPunctuate
+        let lists = sessionMode?.smartLists ?? Settings.shared.smartLists
+        opts.removeFillers = sessionMode?.removeFillers
+        opts.autoPunctuate = punctuate
+        opts.smartLists = lists
+        opts.allowTerminalPunctuation = !searchField && punctuate
+        opts.allowLists = !searchField && !codeSafe && lists
         opts.stripTrailingPeriod = searchField
         Log.write("cleanOptions: app=\(bundleID) codeSafe=\(codeSafe) searchField=\(searchField)")
         return opts
@@ -463,6 +477,14 @@ final class DictationController {
         if history.count > 25 { history.removeLast() }
         Settings.shared.historyStore = history
         Settings.shared.totalWordsDictated += text.split(whereSeparator: \.isWhitespace).count
+        TranscriptHistory.shared.add(TranscriptRecord(
+            text: text,
+            kind: historyKind(for: activeAction),
+            appName: sessionAppName,
+            bundleIdentifier: sessionApp,
+            modeName: sessionMode?.name,
+            duration: sessionDuration
+        ))
 
         let currentApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let sameApp = sessionApp == nil || currentApp == sessionApp
@@ -490,5 +512,16 @@ final class DictationController {
         if pressEnter { injector.pressReturn(after: 0.35) }
         state = .idle
         hud.flashDone(pressEnter ? "Sent" : "Inserted")
+    }
+
+    private func historyKind(for action: KeyAction) -> TranscriptRecord.Kind {
+        switch action {
+        case .dictate, .off: return .dictation
+        case .aiRewrite: return .rewrite
+        case .aiEdit, .aiCompose: return .compose
+        case .aiAsk: return .ask
+        case .aiDeep: return .research
+        case .aiAgent: return .action
+        }
     }
 }

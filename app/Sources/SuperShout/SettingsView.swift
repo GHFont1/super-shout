@@ -61,6 +61,7 @@ struct SettingsView: View {
     @State private var language = Settings.shared.language
     @State private var audioInputUID = Settings.shared.audioInputUID
     @State private var enhanceQuietAudio = Settings.shared.enhanceQuietAudio
+    @State private var speechEngine = Settings.shared.speechEngine
     @State private var smartSpacing = Settings.shared.smartSpacing
     @State private var autoPunctuate = Settings.shared.autoPunctuate
     @State private var smartLists = Settings.shared.smartLists
@@ -79,6 +80,10 @@ struct SettingsView: View {
     @State private var vocabText = Settings.shared.vocabulary.joined(separator: "\n")
     @State private var newSpoken = ""
     @State private var newReplacement = ""
+    @State private var snippets = Settings.shared.voiceSnippets
+    @State private var newSnippetTrigger = ""
+    @State private var newSnippetReplacement = ""
+    @State private var appModes = Settings.shared.appModes
 
     var body: some View {
         Form {
@@ -114,6 +119,13 @@ struct SettingsView: View {
             }
 
             Section("Transcription") {
+                Picker("Speech engine", selection: $speechEngine) {
+                    ForEach(SpeechEngineChoice.allCases) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: speechEngine) {
+                    Settings.shared.speechEngine = speechEngine
+                    if speechEngine != .legacy { Transcriber.prepareModernEngine() }
+                }
                 Picker("Microphone", selection: $audioInputUID) {
                     Text("System default (\(AudioInputDevice.systemDefaultName() ?? "current input"))").tag("")
                     ForEach(AudioInputDevice.available()) { device in
@@ -139,6 +151,56 @@ struct SettingsView: View {
                     ForEach(HUDPosition.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .onChange(of: hudPosition) { Settings.shared.hudPosition = hudPosition }
+                Button("Run microphone check…") { AppDelegate.shared?.openDiagnostic() }
+            }
+
+            Section("Voice snippets") {
+                Text("Say a short trigger and Super Shout expands it before inserting, such as “my address” or “standard reply.”")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(snippets) { snippet in
+                    HStack {
+                        Text(snippet.trigger).fontWeight(.medium)
+                        Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                        Text(snippet.replacement).lineLimit(1)
+                        Spacer()
+                        Button(role: .destructive) {
+                            snippets.removeAll { $0.id == snippet.id }; Settings.shared.voiceSnippets = snippets
+                        } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+                    }
+                }
+                HStack {
+                    TextField("Spoken trigger", text: $newSnippetTrigger)
+                    TextField("Expanded text", text: $newSnippetReplacement)
+                    Button("Add") {
+                        guard !newSnippetTrigger.isEmpty, !newSnippetReplacement.isEmpty else { return }
+                        snippets.append(VoiceSnippet(trigger: newSnippetTrigger, replacement: newSnippetReplacement))
+                        Settings.shared.voiceSnippets = snippets; newSnippetTrigger = ""; newSnippetReplacement = ""
+                    }
+                }
+            }
+
+            Section("Automatic app modes") {
+                Text("Formatting switches automatically based on the app that was active when you started speaking.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach($appModes) { $mode in
+                    DisclosureGroup(mode.name) {
+                        TextField("Mode name", text: $mode.name)
+                        TextField("Bundle IDs, comma separated", text: Binding(
+                            get: { mode.bundleIdentifiers.joined(separator: ", ") },
+                            set: { mode.bundleIdentifiers = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }; Settings.shared.appModes = appModes }
+                        ))
+                        Toggle("Remove filler words", isOn: $mode.removeFillers)
+                        Toggle("End sentences with punctuation", isOn: $mode.autoPunctuate)
+                        Toggle("Turn spoken lists into bullets", isOn: $mode.smartLists)
+                        Toggle("Polish with AI", isOn: $mode.aiPolish)
+                        Button("Delete mode", role: .destructive) { appModes.removeAll { $0.id == mode.id }; Settings.shared.appModes = appModes }
+                    }
+                    .onChange(of: mode) { Settings.shared.appModes = appModes }
+                }
+                Button("Add mode") {
+                    appModes.append(AppMode(name: "New Mode", bundleIdentifiers: [], removeFillers: true, autoPunctuate: true, smartLists: false, aiPolish: false))
+                    Settings.shared.appModes = appModes
+                }
             }
 
             Section("Formatting") {

@@ -8,8 +8,10 @@ swift build -c release --arch arm64 --arch x86_64
 
 APP=build/SuperShout.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp .build/apple/Products/Release/SuperShout "$APP/Contents/MacOS/SuperShout"
+cp -R .build/apple/Products/Release/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/SuperShout"
 cp Resources/* "$APP/Contents/Resources/" 2>/dev/null || true
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -21,8 +23,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.gca.supershout</string>
     <key>CFBundleName</key><string>Super Shout</string>
     <key>CFBundleDisplayName</key><string>Super Shout</string>
-    <key>CFBundleShortVersionString</key><string>1.6</string>
-    <key>CFBundleVersion</key><string>6</string>
+    <key>CFBundleShortVersionString</key><string>2.0</string>
+    <key>CFBundleVersion</key><string>7</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
@@ -30,6 +32,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>Super Shout listens while you hold the hotkey so it can transcribe your speech.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Super Shout transcribes your speech on-device to insert text where you are typing.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Meeting mode captures computer audio so Super Shout can transcribe calls and presentations. Screen pixels are not saved.</string>
+    <key>SUFeedURL</key><string>https://ghfont1.github.io/super-shout/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>3qWeSjlqa3cLVnmAYvpnnBWiUal5C/F7XWPayKpMh0I=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAllowsAutomaticUpdates</key><true/>
+    <key>SUAutomaticallyUpdate</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict>
 </plist>
 PLIST
@@ -49,7 +59,8 @@ ENT
 # development identity so builds still work on machines without it.
 IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')
 if [[ -n "$IDENTITY" ]]; then
-    codesign --force --deep --sign "$IDENTITY" --identifier com.gca.supershout \
+    codesign --force --deep --sign "$IDENTITY" --options runtime --timestamp "$APP/Contents/Frameworks/Sparkle.framework"
+    codesign --force --sign "$IDENTITY" --identifier com.gca.supershout \
         --options runtime --entitlements build/entitlements.plist --timestamp "$APP"
     echo "Signed with: $IDENTITY (hardened runtime)"
 else

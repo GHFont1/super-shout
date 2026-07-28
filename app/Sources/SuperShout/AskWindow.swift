@@ -54,7 +54,11 @@ final class AskSession: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.pending = false
-                self.messages.append(Message(fromUser: false, text: answer ?? "Sorry — the request failed. Check the AI provider in Settings."))
+                let response = answer ?? "Sorry — the request failed. Check the AI provider in Settings."
+                self.messages.append(Message(fromUser: false, text: response))
+                if let answer {
+                    TranscriptHistory.shared.add(TranscriptRecord(text: answer, rawText: transcript, kind: .ask, appName: "Super Shout AI Ask"))
+                }
             }
         }
     }
