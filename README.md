@@ -15,6 +15,7 @@ System-wide voice dictation for macOS, modeled on Wispr Flow but native, on-devi
 - **App-aware AI tone**: AI Compose and polish are told which app the text is landing in, so a Slack message reads differently from a Mail draft — no screenshots involved, just the app name.
 - **Sound cues + stats**: soft click when listening starts/stops (toggleable), and the menu shows words dictated plus estimated time saved vs typing. The Shout Bar can be moved to the bottom left/right so it never covers a Send button.
 - **Long dictation**: recognition tasks rotate every 50 s and segments are stitched, sidestepping SFSpeechRecognizer's ~1-minute limit.
+- **Phone and speaker audio**: choose the exact microphone in Settings instead of relying on macOS's often-wrong webcam default. Quiet indirect speech is conservatively normalized before recognition, while silence and normal close-mic speech are left alone.
 - **Quality of life**: onboarding permission checklist window, launch-at-login toggle, persisted transcript history, words-dictated counter in the menu, fn/🌐 conflict warning, API key in the Keychain.
 - Floating "Shout Bar" HUD with live waveform + partial transcript.
 - Optional Claude API polish (off by default, user-supplied key, model selectable in Settings).

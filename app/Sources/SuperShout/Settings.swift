@@ -343,6 +343,21 @@ final class Settings {
         set { d.set(newValue, forKey: "language") }
     }
 
+    /// Empty follows the macOS system default. A saved UID keeps Super Shout on
+    /// the intended USB microphone even when a webcam becomes the default.
+    var audioInputUID: String {
+        get { d.string(forKey: "audioInputUID") ?? "" }
+        set { d.set(newValue, forKey: "audioInputUID") }
+    }
+
+    /// Phone speakers and conference calls often arrive much quieter than a
+    /// person speaking directly into the mic. Normalize only quiet, non-silent
+    /// buffers before they reach Speech.framework.
+    var enhanceQuietAudio: Bool {
+        get { d.object(forKey: "enhanceQuietAudio") as? Bool ?? true }
+        set { d.set(newValue, forKey: "enhanceQuietAudio") }
+    }
+
     // Personal dictionary: spoken (case-insensitive) -> replacement
     var dictionary: [String: String] {
         get { (d.dictionary(forKey: "personalDictionary") as? [String: String]) ?? [:] }

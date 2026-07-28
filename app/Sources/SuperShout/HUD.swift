@@ -6,8 +6,13 @@ import SwiftUI
 final class HUDController {
     private let model = HUDModel()
     private var panel: NSPanel?
+    /// Invalidates delayed hides from an older success/error/info flash. Without
+    /// this, starting a new request quickly could let the previous timer hide
+    /// the new request's still-active processing bar.
+    private var presentationID = 0
 
     func update(for state: DictationState) {
+        presentationID += 1
         switch state {
         case .idle:
             // Success/cancel flashes are triggered explicitly via flashDone;
@@ -38,33 +43,45 @@ final class HUDController {
 
     /// Mid-processing status updates ("Asking Claude…").
     func showStatus(_ text: String) {
+        presentationID += 1
         model.mode = .processing
         model.statusText = text
         show()
     }
 
     func flashDone(_ message: String) {
+        presentationID += 1
+        let id = presentationID
         model.mode = .done
         model.statusText = message
         show()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-            if self?.model.mode == .done { self?.hide() }
+            guard let self, self.presentationID == id, self.model.mode == .done else { return }
+            self.hide()
         }
     }
 
     func flashError(_ message: String) {
+        presentationID += 1
+        let id = presentationID
         model.mode = .error
         model.statusText = message
         show()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.hide() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self, self.presentationID == id, self.model.mode == .error else { return }
+            self.hide()
+        }
     }
 
     func flashInfo(_ message: String) {
+        presentationID += 1
+        let id = presentationID
         model.mode = .info
         model.statusText = message
         show()
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            if self?.model.mode == .info { self?.hide() }
+            guard let self, self.presentationID == id, self.model.mode == .info else { return }
+            self.hide()
         }
     }
 
@@ -147,9 +164,15 @@ struct ShoutBarView: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(iconColor)
+                if model.mode == .processing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.yellow)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(iconColor)
+                }
 
                 if model.mode == .listening {
                     HStack(spacing: 2.5) {

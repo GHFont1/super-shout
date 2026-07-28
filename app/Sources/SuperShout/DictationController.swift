@@ -66,6 +66,7 @@ final class DictationController {
         transcriber?.cancel()
         transcriber = nil
         handsFreeActive = false
+        if activeAction == .aiAsk { AskWindowController.shared.endLive() }
         state = .idle
         hud.flashDone("Canceled")
         NSLog("SuperShout: dictation canceled")
@@ -134,11 +135,20 @@ final class DictationController {
         }
 
         hud.configureSession(label: sessionLabel(for: action), accent: accent(for: action))
+        if action == .aiAsk {
+            // The Ask panel pulls down immediately and shows the words live —
+            // the conversation surface is visible before the first word lands.
+            AskWindowController.shared.beginLive(engine: engine)
+        }
 
         let t = Transcriber()
         transcriber = t
         t.onLevel = { [weak self] level in self?.hud.pushLevel(level) }
-        t.onPartial = { [weak self] text in self?.hud.showPartial(text) }
+        t.onPartial = { [weak self] text in
+            guard let self else { return }
+            self.hud.showPartial(text)
+            if self.activeAction == .aiAsk { AskWindowController.shared.updatePartial(text) }
+        }
         do {
             try t.begin()
             listenStartedAt = Date()
@@ -148,6 +158,7 @@ final class DictationController {
         } catch {
             transcriber = nil
             handsFreeActive = false
+            if action == .aiAsk { AskWindowController.shared.endLive() }
             NSLog("SuperShout: failed to start listening — \(error.localizedDescription)")
             hud.flashError(error.localizedDescription)
         }
@@ -271,17 +282,21 @@ final class DictationController {
             state = .idle
             return
         }
-        guard ClaudePolish.isDeepAvailable else {
+        guard ClaudePolish.isDeepAvailable(for: activeEngine) else {
             state = .idle
-            hud.flashError("Deep Research needs the Claude Code CLI installed")
+            hud.flashError("Deep Research needs that key's CLI engine installed")
             return
         }
         Log.write("DEEP instruction: \"\(instruction.prefix(120))\"")
         state = .idle
-        hud.flashInfo("Deep research started — I'll copy the result to your clipboard when it's ready")
-        ClaudePolish.deepResearch(instruction, engine: activeEngine) { [weak self] result in
+        let engineLabel = ClaudePolish.resolvedEngineLabel(for: activeEngine)
+        let task = ActivityCenter.shared.begin(kind: "Deep Research · \(engineLabel)", title: instruction)
+        ClaudePolish.deepResearch(instruction, engine: activeEngine, onProgress: { line in
+            ActivityCenter.shared.update(task, line)
+        }) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
+                ActivityCenter.shared.finish(task, report: result)
                 if let result {
                     self.history.insert(result, at: 0)
                     if self.history.count > 25 { self.history.removeLast() }
@@ -308,18 +323,22 @@ final class DictationController {
             state = .idle
             return
         }
-        guard ClaudePolish.isDeepAvailable else {
+        guard ClaudePolish.isDeepAvailable(for: activeEngine) else {
             state = .idle
-            hud.flashError("AI Do needs the Claude Code CLI installed")
+            hud.flashError("AI Do needs that key's CLI engine installed")
             return
         }
         let selection = capturedSelection
         Log.write("AGENT instruction: \"\(instruction.prefix(120))\" selection=\(selection?.count ?? 0) chars")
         state = .idle
-        hud.flashInfo("On it — working in the background, I'll report when done")
-        ClaudePolish.agentAct(instruction: instruction, selection: selection, engine: activeEngine) { [weak self] report in
+        let engineLabel = ClaudePolish.resolvedEngineLabel(for: activeEngine)
+        let task = ActivityCenter.shared.begin(kind: "AI Do · \(engineLabel)", title: instruction)
+        ClaudePolish.agentAct(instruction: instruction, selection: selection, engine: activeEngine, onProgress: { line in
+            ActivityCenter.shared.update(task, line)
+        }) { [weak self] report in
             DispatchQueue.main.async {
                 guard let self else { return }
+                ActivityCenter.shared.finish(task, report: report)
                 if let report {
                     self.history.insert(report, at: 0)
                     if self.history.count > 25 { self.history.removeLast() }
@@ -340,6 +359,7 @@ final class DictationController {
         opts.allowLists = false
         let question = CleanupEngine.clean(raw, options: opts)
         guard !question.isEmpty else {
+            AskWindowController.shared.endLive()
             state = .idle
             return
         }
@@ -395,7 +415,9 @@ final class DictationController {
             return
         }
         Log.write("AI instruction (\(action.rawValue)): \"\(instruction.prefix(80))\" selection=\(capturedSelection?.count ?? 0) chars")
-        hud.showStatus("Asking Claude…")
+        let resolvedEngine = ClaudePolish.resolvedEngineLabel(for: activeEngine)
+        Log.write("AI resolved engine: \(resolvedEngine)")
+        hud.showStatus("Asking \(resolvedEngine)…")
 
         let complete: (String?) -> Void = { [weak self] result in
             DispatchQueue.main.async {

@@ -38,6 +38,8 @@ final class Transcriber: NSObject {
     /// True while a throttled restart is queued — the current task is already
     /// done, so a finish() during this window can complete immediately.
     private var awaitingRestart = false
+    private var smoothedGain: Float = 1
+    private var peakLevel: Float = 0
 
     func begin() throws {
         segments = [:]
@@ -46,11 +48,22 @@ final class Transcriber: NSObject {
         finishing = false
         lastRestartAt = nil
         awaitingRestart = false
+        smoothedGain = 1
+        peakLevel = 0
         let locale = Locale(identifier: Settings.shared.language)
         recognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer, recognizer.isAvailable else {
             throw NSError(domain: "SuperShout", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Speech recognizer unavailable for \(locale.identifier)"])
+        }
+
+        let selectedUID = Settings.shared.audioInputUID
+        let selectedName = AudioInputDevice.apply(uid: selectedUID, to: engine)
+        let inputName = selectedName ?? AudioInputDevice.systemDefaultName() ?? "unknown"
+        if !selectedUID.isEmpty, selectedName == nil {
+            Log.write("saved microphone unavailable; using system default \(inputName)")
+        } else {
+            Log.write("microphone: \(inputName) quietBoost=\(Settings.shared.enhanceQuietAudio)")
         }
 
         startRecognitionTask()
@@ -77,6 +90,7 @@ final class Transcriber: NSObject {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            self?.enhanceForRecognition(buffer)
             self?.request?.append(buffer)
             self?.reportLevel(buffer)
         }
@@ -265,6 +279,9 @@ final class Transcriber: NSObject {
             self.request = nil
             self.retiredTasks.forEach { $0.cancel() }
             self.retiredTasks = []
+            let peak = String(format: "%.2f", self.peakLevel)
+            let gain = String(format: "%.2fx", self.smoothedGain)
+            Log.write("audio session: peak=\(peak) gain=\(gain) transcriptChars=\(self.assembledTranscript().count)")
             completion(self.assembledTranscript())
         }
     }
@@ -298,6 +315,46 @@ final class Transcriber: NSObject {
         for i in stride(from: 0, to: n, by: 8) { sum += data[i] * data[i] }
         let rms = sqrt(sum / Float(n / 8 + 1))
         let level = min(1, rms * 12)
+        peakLevel = max(peakLevel, level)
         DispatchQueue.main.async { self.onLevel?(level) }
+    }
+
+    /// Conservative automatic gain for indirect sources. It leaves ordinary
+    /// close-mic speech alone, ignores silence, and boosts only genuinely quiet
+    /// buffers. Processing all channels also avoids favoring one side of a
+    /// stereo webcam microphone.
+    private func enhanceForRecognition(_ buffer: AVAudioPCMBuffer) {
+        guard Settings.shared.enhanceQuietAudio,
+              let channels = buffer.floatChannelData else { return }
+        let frameCount = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+        guard frameCount > 0, channelCount > 0 else { return }
+
+        var sum: Float = 0
+        var samples = 0
+        for channel in 0..<channelCount {
+            for i in stride(from: 0, to: frameCount, by: 8) {
+                let value = channels[channel][i]
+                sum += value * value
+                samples += 1
+            }
+        }
+        let rms = sqrt(sum / Float(max(samples, 1)))
+        let desired: Float
+        if rms < 0.0015 || rms >= 0.055 {
+            desired = 1
+        } else {
+            desired = min(6, max(1, 0.065 / rms))
+        }
+        // Fast attack for a quiet phone voice, gentle release for natural audio.
+        let smoothing: Float = desired > smoothedGain ? 0.35 : 0.08
+        smoothedGain += (desired - smoothedGain) * smoothing
+        guard smoothedGain > 1.05 else { return }
+
+        for channel in 0..<channelCount {
+            for i in 0..<frameCount {
+                channels[channel][i] = max(-1, min(1, channels[channel][i] * smoothedGain))
+            }
+        }
     }
 }

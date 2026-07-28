@@ -1,6 +1,7 @@
 import SwiftUI
 import ServiceManagement
 import Speech
+import AVFoundation
 
 struct SettingsView: View {
     /// Every locale the on-device recognizer supports, nicely named.
@@ -58,6 +59,8 @@ struct SettingsView: View {
     }
     @State private var removeFillers = Settings.shared.removeFillers
     @State private var language = Settings.shared.language
+    @State private var audioInputUID = Settings.shared.audioInputUID
+    @State private var enhanceQuietAudio = Settings.shared.enhanceQuietAudio
     @State private var smartSpacing = Settings.shared.smartSpacing
     @State private var autoPunctuate = Settings.shared.autoPunctuate
     @State private var smartLists = Settings.shared.smartLists
@@ -111,12 +114,23 @@ struct SettingsView: View {
             }
 
             Section("Transcription") {
+                Picker("Microphone", selection: $audioInputUID) {
+                    Text("System default (\(AudioInputDevice.systemDefaultName() ?? "current input"))").tag("")
+                    ForEach(AudioInputDevice.available()) { device in
+                        Text(device.name).tag(device.id)
+                    }
+                }
+                .onChange(of: audioInputUID) { Settings.shared.audioInputUID = audioInputUID }
+                Text("The selected microphone is used the next time listening starts. Choose the mic you physically hold a phone near.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Picker("Language", selection: $language) {
                     ForEach(Self.languageChoices, id: \.id) { choice in
                         Text(choice.name).tag(choice.id)
                     }
                 }
                 .onChange(of: language) { Settings.shared.language = language }
+                Toggle("Boost quiet phone and speaker audio", isOn: $enhanceQuietAudio)
+                    .onChange(of: enhanceQuietAudio) { Settings.shared.enhanceQuietAudio = enhanceQuietAudio }
                 Toggle("Remove filler words (um, uh, you know)", isOn: $removeFillers)
                     .onChange(of: removeFillers) { Settings.shared.removeFillers = removeFillers }
                 Toggle("Play a soft click when listening starts and stops", isOn: $soundCues)
