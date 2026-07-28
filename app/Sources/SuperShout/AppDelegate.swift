@@ -105,13 +105,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func rebuildMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        for key in HoldKey.allCases {
-            let action = Settings.shared.action(for: key)
-            guard action != .off else { continue }
-            let line = NSMenuItem(title: "Hold \(key.displayName) — \(action.displayName)", action: nil, keyEquivalent: "")
-            line.isEnabled = false
-            menu.addItem(line)
-        }
 
         let words = Settings.shared.totalWordsDictated
         if words > 0 {
@@ -122,34 +115,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let savedMinutes = Double(words) / 40.0 - Settings.shared.totalSecondsDictated / 60.0
             if savedMinutes >= 2 {
                 title += savedMinutes >= 90
-                    ? String(format: " · ~%.1f hrs saved", savedMinutes / 60)
-                    : " · ~\(Int(savedMinutes)) min saved"
+                    ? String(format: "  ·  %.1f hours saved", savedMinutes / 60)
+                    : "  ·  \(Int(savedMinutes)) min saved"
             }
             let stats = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            stats.image = menuSymbol("chart.bar.xaxis")
             stats.isEnabled = false
             menu.addItem(stats)
         }
-        menu.addItem(.separator())
+
+        let shortcuts = NSMenuItem(title: "Keyboard Shortcuts", action: nil, keyEquivalent: "")
+        shortcuts.image = menuSymbol("keyboard")
+        let shortcutMenu = NSMenu()
+        shortcutMenu.autoenablesItems = false
+        for key in HoldKey.allCases {
+            let action = Settings.shared.action(for: key)
+            guard action != .off else { continue }
+            let line = NSMenuItem(
+                title: "\(key.displayName)  ·  \(menuName(for: action))",
+                action: #selector(openSettings),
+                keyEquivalent: ""
+            )
+            line.target = self
+            line.isEnabled = true
+            shortcutMenu.addItem(line)
+        }
+        shortcutMenu.addItem(.separator())
+        let customize = NSMenuItem(title: "Customize Shortcuts…", action: #selector(openSettings), keyEquivalent: "")
+        customize.image = menuSymbol("slider.horizontal.3")
+        customize.target = self
+        customize.isEnabled = true
+        shortcutMenu.addItem(customize)
+        shortcuts.submenu = shortcutMenu
+        menu.addItem(shortcuts)
 
         if !AXIsProcessTrusted() {
-            let warn = NSMenuItem(title: "⚠️ Grant Accessibility Access…", action: #selector(openOnboarding), keyEquivalent: "")
+            let warn = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(openOnboarding), keyEquivalent: "")
+            warn.image = menuSymbol("exclamationmark.triangle.fill")
             warn.target = self
             menu.addItem(warn)
-            menu.addItem(.separator())
         }
 
         if fnKeyConflict {
             let warn = NSMenuItem(
-                title: "⚠️ fn also triggers a macOS 🌐 action — set “Press 🌐 key to” to “Do Nothing”…",
+                title: "Resolve fn Key Conflict…",
                 action: #selector(openKeyboardSettings), keyEquivalent: ""
             )
+            warn.image = menuSymbol("exclamationmark.triangle.fill")
+            warn.toolTip = "Set “Press fn key to” to “Do Nothing” in Keyboard Settings."
             warn.target = self
             menu.addItem(warn)
-            menu.addItem(.separator())
         }
+
+        menu.addItem(.separator())
 
         if !controller.history.isEmpty {
             let historyItem = NSMenuItem(title: "Recent Transcripts", action: nil, keyEquivalent: "")
+            historyItem.image = menuSymbol("clock.arrow.circlepath")
             let sub = NSMenu()
             sub.autoenablesItems = false
             for (i, text) in controller.history.prefix(10).enumerated() {
@@ -161,29 +183,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             historyItem.submenu = sub
             menu.addItem(historyItem)
-            menu.addItem(.separator())
         }
 
         let undo = NSMenuItem(title: "Undo Last Insertion", action: #selector(undoLastInsertion), keyEquivalent: "z")
+        undo.image = menuSymbol("arrow.uturn.backward")
         undo.target = self
         undo.isEnabled = controller.canUndo
         menu.addItem(undo)
 
         let teach = NSMenuItem(title: "Fix Last Transcript…", action: #selector(openTeach), keyEquivalent: "e")
+        teach.image = menuSymbol("wand.and.stars")
         teach.target = self
         teach.isEnabled = !controller.history.isEmpty
         menu.addItem(teach)
 
+        menu.addItem(.separator())
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.image = menuSymbol("gearshape")
+        settings.target = self
+        menu.addItem(settings)
+
         let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.image = menuSymbol("arrow.triangle.2.circlepath")
         updates.target = self
         menu.addItem(updates)
 
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Super Shout", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let quit = NSMenuItem(title: "Quit Super Shout", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.image = menuSymbol("power")
+        menu.addItem(quit)
         statusItem.menu = menu
+    }
+
+    private func menuSymbol(_ name: String) -> NSImage? {
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        image?.isTemplate = true
+        return image
+    }
+
+    private func menuName(for action: KeyAction) -> String {
+        switch action {
+        case .dictate: return "Dictate"
+        case .aiRewrite: return "Rewrite"
+        case .aiEdit: return "Edit Selection"
+        case .aiCompose: return "Compose"
+        case .aiDeep: return "Deep Research"
+        case .aiAgent: return "Take Action"
+        case .aiAsk: return "Ask"
+        case .off: return "Off"
+        }
     }
 
     @objc private func undoLastInsertion() {
