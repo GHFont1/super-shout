@@ -23,8 +23,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.gca.supershout</string>
     <key>CFBundleName</key><string>Super Shout</string>
     <key>CFBundleDisplayName</key><string>Super Shout</string>
-    <key>CFBundleShortVersionString</key><string>2.0</string>
-    <key>CFBundleVersion</key><string>7</string>
+    <key>CFBundleShortVersionString</key><string>2.0.1</string>
+    <key>CFBundleVersion</key><string>8</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>

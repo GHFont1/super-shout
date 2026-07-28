@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: NSWindow?
     private var historyWindow: NSWindow?
     private var diagnosticWindow: NSWindow?
+    private var supportWindow: NSWindow?
     private var updaterController: SPUStandardUpdaterController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -185,6 +186,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         micTest.target = self
         menu.addItem(micTest)
 
+        let diagnostics = NSMenuItem(title: "Diagnostics…", action: #selector(openSupportDiagnostics), keyEquivalent: "")
+        diagnostics.image = menuSymbol("stethoscope")
+        diagnostics.target = self
+        menu.addItem(diagnostics)
+
         menu.addItem(.separator())
 
         if !controller.history.isEmpty {
@@ -338,5 +344,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openMeeting() {
         MeetingWindowController.shared.show()
+    }
+
+    @objc func openSupportDiagnostics() {
+        if supportWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: DiagnosticsView()))
+            window.title = "Super Shout Diagnostics"
+            window.styleMask = [.titled, .closable, .resizable]
+            window.isReleasedWhenClosed = false
+            window.center(); supportWindow = window
+        }
+        supportWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

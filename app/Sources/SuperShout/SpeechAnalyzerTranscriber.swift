@@ -52,10 +52,16 @@ final class SpeechAnalyzerAssets {
     private let lock = NSLock()
     private var preparing = false
     private var isReady = false
+    private var preparedFormat: AVAudioFormat?
 
     var ready: Bool {
         lock.lock(); defer { lock.unlock() }
         return isReady
+    }
+
+    var audioFormat: AVAudioFormat? {
+        lock.lock(); defer { lock.unlock() }
+        return preparedFormat
     }
 
     func prepare() {
@@ -66,7 +72,7 @@ final class SpeechAnalyzerAssets {
             do {
                 let requested = Locale(identifier: Settings.shared.language)
                 guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
-                    Log.write("SpeechAnalyzer: locale unsupported: \(requested.identifier)"); finish(ready: false); return
+                    Log.write("SpeechAnalyzer: locale unsupported: \(requested.identifier)"); finish(ready: false, format: nil); return
                 }
                 let module = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
                 let status = await AssetInventory.status(forModules: [module])
@@ -76,17 +82,18 @@ final class SpeechAnalyzerAssets {
                 }
                 _ = try? await AssetInventory.reserve(locale: locale)
                 let finalStatus = await AssetInventory.status(forModules: [module])
-                finish(ready: finalStatus == .installed)
+                let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module])
+                finish(ready: finalStatus == .installed && format != nil, format: format)
                 Log.write("SpeechAnalyzer: model status=\(String(describing: finalStatus))")
             } catch {
                 Log.write("SpeechAnalyzer preparation failed: \(error.localizedDescription)")
-                finish(ready: false)
+                finish(ready: false, format: nil)
             }
         }
     }
 
-    private func finish(ready: Bool) {
-        lock.lock(); isReady = ready; preparing = false; lock.unlock()
+    private func finish(ready: Bool, format: AVAudioFormat?) {
+        lock.lock(); isReady = ready; preparedFormat = format; preparing = false; lock.unlock()
     }
 }
 
@@ -108,14 +115,18 @@ final class SpeechAnalyzerMicrophoneTranscriber: SpeechTranscribing {
         let selectedUID = Settings.shared.audioInputUID
         _ = AudioInputDevice.apply(uid: selectedUID, to: engine)
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        let naturalFormat = input.outputFormat(forBus: 0)
+        guard let analysisFormat = SpeechAnalyzerAssets.shared.audioFormat,
+              let converter = AVAudioConverter(from: naturalFormat, to: analysisFormat) else {
+            throw NSError(domain: "SuperShout", code: 26, userInfo: [NSLocalizedDescriptionKey: "The Apple speech audio format is not ready."])
+        }
         let pair = AsyncStream<AnalyzerInput>.makeStream(bufferingPolicy: .bufferingNewest(800))
         continuation = pair.continuation
 
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 1024, format: naturalFormat) { [weak self] buffer, _ in
             guard let self else { return }
-            if let copied = Self.copyBuffer(buffer) {
-                self.continuation?.yield(AnalyzerInput(buffer: copied))
+            if let converted = Self.convert(buffer, with: converter, to: analysisFormat) {
+                self.continuation?.yield(AnalyzerInput(buffer: converted))
             }
             self.reportLevel(buffer)
         }
@@ -133,7 +144,7 @@ final class SpeechAnalyzerMicrophoneTranscriber: SpeechTranscribing {
             self.analyzer = analyzer
             do {
                 try await analyzer.setContext(context)
-                try await analyzer.prepareToAnalyze(in: format)
+                try await analyzer.prepareToAnalyze(in: analysisFormat)
                 self.analysisTask = Task { try? await analyzer.start(inputSequence: pair.stream) }
                 for try await result in module.results {
                     let key = CMTimeGetSeconds(result.range.start)
@@ -196,5 +207,21 @@ final class SpeechAnalyzerMicrophoneTranscriber: SpeechTranscribing {
             dst[index].mDataByteSize = UInt32(bytes)
         }
         return copy
+    }
+
+    private static func convert(_ source: AVAudioPCMBuffer, with converter: AVAudioConverter, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let ratio = format.sampleRate / source.format.sampleRate
+        let capacity = AVAudioFrameCount(ceil(Double(source.frameLength) * ratio) + 16)
+        guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
+        var supplied = false
+        var conversionError: NSError?
+        let status = converter.convert(to: output, error: &conversionError) { _, inputStatus in
+            if supplied { inputStatus.pointee = .noDataNow; return nil }
+            supplied = true
+            inputStatus.pointee = .haveData
+            return source
+        }
+        guard conversionError == nil, status != .error, output.frameLength > 0 else { return nil }
+        return output
     }
 }

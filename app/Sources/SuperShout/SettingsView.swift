@@ -84,6 +84,8 @@ struct SettingsView: View {
     @State private var newSnippetTrigger = ""
     @State private var newSnippetReplacement = ""
     @State private var appModes = Settings.shared.appModes
+    @State private var historyRetention = Settings.shared.historyRetention
+    @State private var dataMessage = ""
 
     var body: some View {
         Form {
@@ -200,6 +202,23 @@ struct SettingsView: View {
                 Button("Add mode") {
                     appModes.append(AppMode(name: "New Mode", bundleIdentifiers: [], removeFillers: true, autoPunctuate: true, smartLists: false, aiPolish: false))
                     Settings.shared.appModes = appModes
+                }
+            }
+
+            Section("History and portability") {
+                Picker("Keep transcript history", selection: $historyRetention) {
+                    ForEach(HistoryRetention.allCases) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: historyRetention) {
+                    Settings.shared.historyRetention = historyRetention
+                    TranscriptHistory.shared.prune()
+                }
+                Text("History stays in this Mac's Application Support folder. AI recall sends recent history only when you click Ask History.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("Export Settings and History…") { dataMessage = PortableBackup.export() }
+                    Button("Import…") { dataMessage = PortableBackup.importBackup() }
+                    Button("Open Library…") { AppDelegate.shared?.openHistory() }
                 }
             }
 
@@ -367,5 +386,8 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 560)
+        .alert("Super Shout", isPresented: Binding(get: { !dataMessage.isEmpty }, set: { if !$0 { dataMessage = "" } })) {
+            Button("OK") { dataMessage = "" }
+        } message: { Text(dataMessage) }
     }
 }

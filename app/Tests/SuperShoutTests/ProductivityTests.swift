@@ -19,4 +19,10 @@ final class ProductivityTests: XCTestCase {
         XCTAssertTrue(record.searchableText.contains("inventory"))
         XCTAssertTrue(record.searchableText.contains("zoom"))
     }
+
+    func testHistoryRetentionDefaultsCanPreserveEverything() throws {
+        XCTAssertNil(HistoryRetention.forever.cutoff)
+        let cutoff = try XCTUnwrap(HistoryRetention.thirtyDays.cutoff)
+        XCTAssertEqual(Date().timeIntervalSince(cutoff), 30 * 24 * 60 * 60, accuracy: 2)
+    }
 }

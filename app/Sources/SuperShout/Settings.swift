@@ -368,6 +368,11 @@ final class Settings {
         set { encode(newValue, key: "voiceSnippets") }
     }
 
+    var historyRetention: HistoryRetention {
+        get { HistoryRetention(rawValue: d.string(forKey: "historyRetention") ?? "") ?? .forever }
+        set { d.set(newValue.rawValue, forKey: "historyRetention") }
+    }
+
     var appModes: [AppMode] {
         get { decode([AppMode].self, key: "appModes") ?? AppMode.builtIns }
         set { encode(newValue, key: "appModes") }
