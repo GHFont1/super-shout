@@ -14,6 +14,29 @@ enum SpeechEngineChoice: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum HistoryRetention: String, CaseIterable, Codable, Identifiable {
+    case thirtyDays, ninetyDays, oneYear, forever
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .thirtyDays: return "30 days"
+        case .ninetyDays: return "90 days"
+        case .oneYear: return "1 year"
+        case .forever: return "Forever"
+        }
+    }
+    var cutoff: Date? {
+        let days: Int
+        switch self {
+        case .thirtyDays: days = 30
+        case .ninetyDays: days = 90
+        case .oneYear: days = 365
+        case .forever: return nil
+        }
+        return Calendar.current.date(byAdding: .day, value: -days, to: Date())
+    }
+}
+
 struct VoiceSnippet: Codable, Identifiable, Equatable {
     var id = UUID()
     var trigger: String

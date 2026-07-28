@@ -1,7 +1,13 @@
 import AppKit
 
 let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
 app.setActivationPolicy(.accessory)
+let appDelegate: AppDelegate?
+if CommandLine.arguments.contains("--acceptance-test") {
+    appDelegate = nil
+    Task { @MainActor in AcceptanceTestRunner.run() }
+} else {
+    appDelegate = AppDelegate()
+    app.delegate = appDelegate
+}
 app.run()

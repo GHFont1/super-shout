@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION="2.0"
+VERSION="2.0.1"
 SITE="../site"
 ARCHIVE="$SITE/releases/SuperShout-$VERSION.zip"
 
@@ -21,7 +21,7 @@ cp "$ARCHIVE" "$SITE/SuperShout.zip"
   --account com.gca.supershout \
   --download-url-prefix "https://ghfont1.github.io/super-shout/releases/" \
   --embed-release-notes --maximum-deltas 0 \
-  --versions 7 \
+  --versions 8 \
   -o "$SITE/appcast.xml" "$SITE/releases"
 
 codesign --verify --deep --strict --verbose=2 build/SuperShout.app

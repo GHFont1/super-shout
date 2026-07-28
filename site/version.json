@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
-  "notes": "Apple SpeechAnalyzer on macOS 26, phone and meeting transcription, microphone diagnostics, automatic app modes, voice snippets, searchable history, and signed background updates.",
+  "version": "2.0.1",
+  "notes": "More reliable phone and meeting transcription, guided permissions, history retention and backup controls, and privacy-safe diagnostics.",
   "url": "https://ghfont1.github.io/super-shout/SuperShout.zip"
 }

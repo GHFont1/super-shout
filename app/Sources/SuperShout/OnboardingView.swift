@@ -10,6 +10,7 @@ struct OnboardingView: View {
     @State private var micGranted = false
     @State private var speechGranted = false
     @State private var axGranted = false
+    @State private var meetingGranted = false
     @State private var testText = ""
 
     private let poll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -45,6 +46,12 @@ struct OnboardingView: View {
                 detail: "Powers the global hotkey and inserts text at your cursor.",
                 action: openAXSettings
             )
+            permissionRow(
+                granted: meetingGranted,
+                title: "Computer Audio (optional)",
+                detail: "Required only for Meeting Mode. Super Shout receives audio but never saves screen pixels.",
+                action: requestMeeting
+            )
 
             Divider()
 
@@ -61,9 +68,15 @@ struct OnboardingView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary.opacity(0.3)))
             }
 
+            HStack(spacing: 14) {
+                feature("person.2.wave.2", "Meetings", "Separate you and computer audio")
+                feature("text.quote", "History", "Search and recall past transcripts")
+                feature("text.badge.plus", "Snippets", "Expand reusable spoken shortcuts")
+            }
+
             HStack {
-                Text("Quick-tap the hotkey for hands-free. Esc cancels a dictation.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Button("Test Microphone…") { AppDelegate.shared?.openDiagnostic() }
+                Button("Open Transcript Library…") { AppDelegate.shared?.openHistory() }
                 Spacer()
                 Button(allGranted ? "Done" : "Close") {
                     NSApp.keyWindow?.close()
@@ -72,9 +85,18 @@ struct OnboardingView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: 470)
+        .frame(width: 620, height: 650)
         .onAppear(perform: refresh)
         .onReceive(poll) { _ in refresh() }
+    }
+
+    private func feature(_ icon: String, _ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: icon).foregroundStyle(.orange)
+            Text(title).font(.headline)
+            Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
     }
 
     private func permissionRow(granted: Bool, title: String, detail: String, action: @escaping () -> Void) -> some View {
@@ -99,6 +121,7 @@ struct OnboardingView: View {
         micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         speechGranted = SFSpeechRecognizer.authorizationStatus() == .authorized
         axGranted = AXIsProcessTrusted()
+        meetingGranted = CGPreflightScreenCaptureAccess()
     }
 
     private func requestMic() {
@@ -123,6 +146,13 @@ struct OnboardingView: View {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(opts)
         openPane("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    }
+
+    private func requestMeeting() {
+        if !CGRequestScreenCaptureAccess() {
+            openPane("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        }
+        refresh()
     }
 
     private func openPane(_ urlString: String) {

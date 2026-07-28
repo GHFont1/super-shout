@@ -20,14 +20,40 @@ final class TranscriptHistory: ObservableObject {
             records = Settings.shared.historyStore.map { TranscriptRecord(text: $0, kind: .dictation) }
             persist()
         }
+        prune()
     }
 
     func add(_ record: TranscriptRecord) {
         records.insert(record, at: 0)
+        prune(notify: false)
         if records.count > 2_000 { records.removeLast(records.count - 2_000) }
         Settings.shared.historyStore = Array(records.prefix(25).map(\.text))
         persist()
         NotificationCenter.default.post(name: .superShoutHistoryChanged, object: nil)
+    }
+
+    func prune(notify: Bool = true) {
+        if let cutoff = Settings.shared.historyRetention.cutoff {
+            records.removeAll { $0.createdAt < cutoff }
+        }
+        if records.count > 2_000 { records.removeLast(records.count - 2_000) }
+        Settings.shared.historyStore = Array(records.prefix(25).map(\.text))
+        persist()
+        if notify { NotificationCenter.default.post(name: .superShoutHistoryChanged, object: nil) }
+    }
+
+    func deleteAll() {
+        records = []
+        Settings.shared.historyStore = []
+        persist()
+        NotificationCenter.default.post(name: .superShoutHistoryChanged, object: nil)
+    }
+
+    func mergeImported(_ imported: [TranscriptRecord]) {
+        let existing = Set(records.map(\.id))
+        records.append(contentsOf: imported.filter { !existing.contains($0.id) })
+        records.sort { $0.createdAt > $1.createdAt }
+        prune()
     }
 
     func delete(_ record: TranscriptRecord) {
@@ -69,6 +95,8 @@ struct TranscriptHistoryView: View {
     @State private var selection: TranscriptRecord.ID?
     @State private var recallAnswer = ""
     @State private var recalling = false
+    @State private var showingDeleteConfirmation = false
+    @State private var transferMessage = ""
 
     private var results: [TranscriptRecord] { store.search(query) }
 
@@ -80,6 +108,12 @@ struct TranscriptHistoryView: View {
                     .textFieldStyle(.plain)
                 Button(recalling ? "Thinking…" : "Ask History") { askHistory() }
                     .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || recalling || !ClaudePolish.isConfigured)
+                Menu {
+                    Button("Export Settings and History…") { transferMessage = PortableBackup.export() }
+                    Button("Import Settings and History…") { transferMessage = PortableBackup.importBackup() }
+                    Divider()
+                    Button("Delete All History…", role: .destructive) { showingDeleteConfirmation = true }
+                } label: { Image(systemName: "ellipsis.circle") }
             }
             .padding(12)
             Divider()
@@ -124,7 +158,15 @@ struct TranscriptHistoryView: View {
                     ContentUnavailableView("No transcripts", systemImage: "text.quote", description: Text("Your dictation history will appear here."))
                 }
             }
-        }.frame(width: 760, height: 520)
+        }
+        .frame(width: 760, height: 520)
+        .alert("Delete all transcript history?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete All", role: .destructive) { store.deleteAll(); selection = nil }
+        } message: { Text("This removes all locally stored dictations and meeting transcripts. This cannot be undone.") }
+        .alert("Super Shout", isPresented: Binding(get: { !transferMessage.isEmpty }, set: { if !$0 { transferMessage = "" } })) {
+            Button("OK") { transferMessage = "" }
+        } message: { Text(transferMessage) }
     }
 
     private func askHistory() {

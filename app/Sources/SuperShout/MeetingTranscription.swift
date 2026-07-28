@@ -12,8 +12,9 @@ private final class MeetingSpeechLane {
     private var segments: [Int: String] = [:]
     private var generation = 0
     private let lock = NSLock()
+    private var stopping = false
 
-    func start() { startTask() }
+    func start() { stopping = false; startTask() }
 
     func append(_ sample: CMSampleBuffer) {
         lock.lock(); let active = request; lock.unlock()
@@ -27,10 +28,11 @@ private final class MeetingSpeechLane {
     }
 
     func stop() {
-        request?.endAudio()
-        task?.cancel()
-        request = nil
-        task = nil
+        stopping = true
+        lock.lock(); let endingRequest = request; request = nil; lock.unlock()
+        let endingTask = task; task = nil
+        endingRequest?.endAudio()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { endingTask?.cancel() }
     }
 
     var text: String { segments.sorted { $0.key < $1.key }.map(\.value).filter { !$0.isEmpty }.joined(separator: " ") }
@@ -44,14 +46,14 @@ private final class MeetingSpeechLane {
         request.addsPunctuation = true
         request.taskHint = .dictation
         request.contextualStrings = Array(Settings.shared.contextualStrings.prefix(200))
-        if recognizer?.supportsOnDeviceRecognition == true { request.requiresOnDeviceRecognition = true }
         lock.lock(); self.request = request; lock.unlock()
-        task = recognizer?.recognitionTask(with: request) { [weak self] result, _ in
+        task = recognizer?.recognitionTask(with: request) { [weak self] result, error in
+            if let error { Log.write("meeting speech lane \(gen) failed: \(error.localizedDescription)") }
             guard let self, let result else { return }
             DispatchQueue.main.async {
                 self.segments[gen] = result.bestTranscription.formattedString
                 self.onText?(self.text)
-                if result.isFinal, gen == self.generation { self.startTask() }
+                if result.isFinal, gen == self.generation, !self.stopping { self.startTask() }
             }
         }
     }
@@ -64,6 +66,8 @@ final class MeetingTranscriptionController: NSObject, ObservableObject, SCStream
     @Published var computerText = ""
     @Published var summary = ""
     @Published var isSummarizing = false
+    @Published private(set) var computerSampleCount = 0
+    @Published private(set) var microphoneSampleCount = 0
 
     private let you = MeetingSpeechLane()
     private let computer = MeetingSpeechLane()
@@ -72,8 +76,12 @@ final class MeetingTranscriptionController: NSObject, ObservableObject, SCStream
     private var rotationTimer: Timer?
     private let audioQueue = DispatchQueue(label: "com.gca.supershout.meeting-audio", qos: .userInitiated)
     private var startedAt: Date?
+    private let saveToHistory: Bool
+    private let excludeCurrentProcessAudio: Bool
 
-    override init() {
+    init(saveToHistory: Bool = true, excludeCurrentProcessAudio: Bool = true) {
+        self.saveToHistory = saveToHistory
+        self.excludeCurrentProcessAudio = excludeCurrentProcessAudio
         super.init()
         you.onText = { [weak self] in self?.yourText = $0 }
         computer.onText = { [weak self] in self?.computerText = $0 }
@@ -91,7 +99,7 @@ final class MeetingTranscriptionController: NSObject, ObservableObject, SCStream
                 config.width = 2; config.height = 2
                 config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
                 config.capturesAudio = true
-                config.excludesCurrentProcessAudio = true
+                config.excludesCurrentProcessAudio = excludeCurrentProcessAudio
                 config.sampleRate = 48_000
                 config.channelCount = 2
                 if #available(macOS 15.0, *) {
@@ -173,8 +181,14 @@ final class MeetingTranscriptionController: NSObject, ObservableObject, SCStream
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard sampleBuffer.isValid else { return }
-        if type == .audio { computer.append(sampleBuffer) }
-        if #available(macOS 15.0, *), type == .microphone { you.append(sampleBuffer) }
+        if type == .audio {
+            computer.append(sampleBuffer)
+            DispatchQueue.main.async { [weak self] in self?.computerSampleCount += 1 }
+        }
+        if #available(macOS 15.0, *), type == .microphone {
+            you.append(sampleBuffer)
+            DispatchQueue.main.async { [weak self] in self?.microphoneSampleCount += 1 }
+        }
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
@@ -182,6 +196,7 @@ final class MeetingTranscriptionController: NSObject, ObservableObject, SCStream
     }
 
     private func saveRecord(summary: String?) {
+        guard saveToHistory else { return }
         let text = markdownTranscript
         guard text.count > 40 else { return }
         TranscriptHistory.shared.add(TranscriptRecord(text: text, kind: .meeting, duration: startedAt.map { Date().timeIntervalSince($0) }, summary: summary))
