@@ -70,24 +70,29 @@ enum ClaudePolish {
         )
     }
 
-    /// AI Deep Research mode: a full agentic Claude Code run that looks facts
+    /// AI Deep Research mode: a full tool-using CLI agent run that looks facts
     /// up first (files, MCP servers, local tooling) and then writes the
     /// deliverable. Minutes, not seconds — runs in the background and the
     /// result is handed over via clipboard + history.
-    static func deepResearch(_ instruction: String, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
+    static func deepResearch(_ instruction: String, engine: EngineChoice = .auto,
+                             onProgress: ((String) -> Void)? = nil,
+                             completion: @escaping (String?) -> Void) {
         let system = "You are a research assistant running on the user's own Mac with access to their files and tools. "
             + "First use your available tools (project files, MCP servers, local scripts, read-only shell commands) to look up the facts the request needs. "
             + "Research is read-only: never send emails or messages, never place or cancel orders, never modify data — the user reviews and sends everything themselves. "
             + "Then produce the final deliverable the request asks for (usually an email or message body, sometimes a summary or report). "
             + "Return ONLY that final text, ready to paste — no explanation of your research process, no preamble. Never use em dashes."
             + businessContextBlock()
-        let res = resolution(for: engine)
-        runDeepClaude(system: system, user: instruction,
-                      modelOverride: res.provider == .claudeCode ? res.model : nil,
-                      completion: completion)
+        runDeepAgent(system: system, user: instruction, engine: engine,
+                     allowsWrites: false, onProgress: onProgress, completion: completion)
     }
 
-    static var isDeepAvailable: Bool { cliPath("claude") != nil }
+    static func isDeepAvailable(for engine: EngineChoice) -> Bool {
+        switch resolution(for: engine).provider {
+        case .codexCLI: return cliPath("codex") != nil
+        case .claudeAPI, .claudeCode: return cliPath("claude") != nil
+        }
+    }
 
     /// Voice Tutor analysis: JSON-only study of recent transcripts. Sonnet-tier
     /// quality via whatever auth route is available.
@@ -122,12 +127,14 @@ enum ClaudePolish {
         }
     }
 
-    /// AI Do mode: a Claude Code agent run that CARRIES OUT the spoken request
+    /// AI Do mode: a tool-using CLI agent run that CARRIES OUT the spoken request
     /// (file the selection in Notion, save a note, run a lookup-and-record) and
     /// reports what it did. Guardrailed: drafts only for outbound messages,
     /// never touches customer orders, no destructive changes.
-    static func agentAct(instruction: String, selection: String?, engine: EngineChoice = .auto, completion: @escaping (String?) -> Void) {
-        let system = "You are an assistant with hands, running on the user's own Mac via Claude Code with access to their files, "
+    static func agentAct(instruction: String, selection: String?, engine: EngineChoice = .auto,
+                         onProgress: ((String) -> Void)? = nil,
+                         completion: @escaping (String?) -> Void) {
+        let system = "You are an assistant with hands, running on the user's own Mac with access to their files, "
             + "MCP servers, and shell. Carry out the spoken request now — actually do it, don't describe how. "
             + "If SELECTED TEXT is provided, the request refers to it. "
             + "Hard rules that override the request: never send emails or messages (create drafts instead and say so); "
@@ -140,15 +147,128 @@ enum ClaudePolish {
         if let selection, !selection.isEmpty {
             user += "\n\nSELECTED TEXT:\n" + selection
         }
+        runDeepAgent(system: system, user: user, engine: engine,
+                     allowsWrites: true, onProgress: onProgress, completion: completion)
+    }
+
+    /// Agent modes need a tool-capable CLI. Route from the same per-key engine
+    /// resolution used by the ordinary AI modes so choosing Codex can never
+    /// silently fall back to Claude.
+    private static func runDeepAgent(system: String, user: String, engine: EngineChoice,
+                                     allowsWrites: Bool, onProgress: ((String) -> Void)?,
+                                     completion: @escaping (String?) -> Void) {
         let res = resolution(for: engine)
-        runDeepClaude(system: system, user: user,
-                      modelOverride: res.provider == .claudeCode ? res.model : nil,
-                      completion: completion)
+        Log.write("AGENT resolved engine: \(resolvedEngineLabel(for: engine)) writes=\(allowsWrites)")
+        switch res.provider {
+        case .codexCLI:
+            runDeepCodex(system: system, user: user, modelOverride: res.model,
+                         allowsWrites: allowsWrites, onProgress: onProgress, completion: completion)
+        case .claudeAPI, .claudeCode:
+            // Tool-using Claude modes require Claude Code even when a saved API
+            // key is the auth route for ordinary requests.
+            runDeepClaude(system: system, user: user, modelOverride: res.model,
+                          onProgress: onProgress, completion: completion)
+        }
+    }
+
+    private static func runDeepCodex(system: String, user: String, modelOverride: String? = nil,
+                                     allowsWrites: Bool, onProgress: ((String) -> Void)? = nil,
+                                     completion: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let bin = cliPath("codex") else { completion(nil); return }
+            let outFile = FileManager.default.temporaryDirectory
+                .appendingPathComponent("supershout-agent-\(UUID().uuidString).txt")
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: bin)
+            var args = ["exec", "--skip-git-repo-check", "-C", NSHomeDirectory(), "-o", outFile.path]
+            if allowsWrites {
+                args += ["--dangerously-bypass-approvals-and-sandbox"]
+            } else {
+                args += ["--sandbox", "read-only"]
+            }
+            let model = modelOverride ?? Settings.shared.codexModel
+            if !model.isEmpty { args += ["-m", model] }
+            if onProgress != nil { args += ["--json"] }
+            process.arguments = args
+
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = (env["PATH"].map { $0 + ":" } ?? "") + cliSearchPaths.joined(separator: ":")
+            process.environment = env
+
+            let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
+            process.standardInput = stdin
+            process.standardOutput = stdout
+            process.standardError = stderr
+
+            Log.write("CODEX AGENT start: model=\(model) writes=\(allowsWrites) streaming=\(onProgress != nil)")
+            do { try process.run() } catch {
+                Log.write("CODEX AGENT launch failed: \(error.localizedDescription)")
+                completion(nil); return
+            }
+            stdin.fileHandleForWriting.write(Data((system + "\n\n" + user).utf8))
+            stdin.fileHandleForWriting.closeFile()
+
+            let killer = DispatchWorkItem { if process.isRunning { process.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 600, execute: killer)
+            if let onProgress {
+                streamCodexEvents(from: stdout.fileHandleForReading, onProgress: onProgress)
+            } else {
+                _ = stdout.fileHandleForReading.readDataToEndOfFile()
+            }
+            process.waitUntilExit()
+            killer.cancel()
+
+            let result = try? String(contentsOf: outFile, encoding: .utf8)
+            try? FileManager.default.removeItem(at: outFile)
+            let trimmed = result?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if process.terminationStatus != 0 || trimmed?.isEmpty != false {
+                let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                Log.write("CODEX AGENT failed: status=\(process.terminationStatus) stderr=\(err.suffix(300))")
+                completion(nil)
+                return
+            }
+            Log.write("CODEX AGENT done: \(trimmed?.count ?? 0) chars")
+            completion(trimmed)
+        }
+    }
+
+    private static func streamCodexEvents(from handle: FileHandle, onProgress: (String) -> Void) {
+        var buffer = Data()
+        while true {
+            let chunk = handle.availableData
+            if chunk.isEmpty { break }
+            buffer.append(chunk)
+            while let nl = buffer.firstIndex(of: 0x0A) {
+                let lineData = buffer.subdata(in: buffer.startIndex..<nl)
+                buffer.removeSubrange(buffer.startIndex...nl)
+                guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                      let type = json["type"] as? String else { continue }
+                if type == "thread.started" {
+                    onProgress("Agent started")
+                    continue
+                }
+                guard let item = json["item"] as? [String: Any] else { continue }
+                let itemType = item["type"] as? String ?? ""
+                if itemType == "command_execution", let command = item["command"] as? String {
+                    onProgress("Shell: \(command.prefix(80))")
+                } else if itemType == "mcp_tool_call" {
+                    let name = item["tool"] as? String ?? item["name"] as? String ?? "Tool"
+                    onProgress(name)
+                } else if itemType == "agent_message", let text = item["text"] as? String {
+                    let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !clean.isEmpty { onProgress(String(clean.prefix(90))) }
+                }
+            }
+        }
     }
 
     /// Dedicated deep runner: always the Claude Code CLI (agentic, tool-using),
     /// from $HOME so global CLAUDE.md and MCP config load, with a 10 min cap.
-    private static func runDeepClaude(system: String, user: String, modelOverride: String? = nil, completion: @escaping (String?) -> Void) {
+    /// With `onProgress`, the run streams JSON events and each tool call /
+    /// assistant note is reported live (feeds the Activity panel).
+    private static func runDeepClaude(system: String, user: String, modelOverride: String? = nil,
+                                      onProgress: ((String) -> Void)? = nil,
+                                      completion: @escaping (String?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let bin = cliPath("claude") else { completion(nil); return }
             let process = Process()
@@ -156,6 +276,7 @@ enum ClaudePolish {
             var args = ["-p", "--permission-mode", "bypassPermissions", "--append-system-prompt", system]
             let model = modelOverride ?? Settings.shared.claudeCodeModel
             if !model.isEmpty { args += ["--model", model] }
+            if onProgress != nil { args += ["--output-format", "stream-json", "--verbose"] }
             process.arguments = args
             process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
 
@@ -168,7 +289,7 @@ enum ClaudePolish {
             process.standardOutput = stdout
             process.standardError = stderr
 
-            Log.write("DEEP start: args=\(args)")
+            Log.write("DEEP start: streaming=\(onProgress != nil) model=\(model)")
             do { try process.run() } catch {
                 Log.write("DEEP launch failed: \(error.localizedDescription)")
                 completion(nil); return
@@ -178,11 +299,18 @@ enum ClaudePolish {
 
             let killer = DispatchWorkItem { if process.isRunning { process.terminate() } }
             DispatchQueue.global().asyncAfter(deadline: .now() + 600, execute: killer)
-            let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+
+            let result: String?
+            if let onProgress {
+                result = streamEvents(from: stdout.fileHandleForReading, onProgress: onProgress)
+            } else {
+                let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+                result = String(data: outData, encoding: .utf8)
+            }
             process.waitUntilExit()
             killer.cancel()
 
-            let trimmed = String(data: outData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = result?.trimmingCharacters(in: .whitespacesAndNewlines)
             if process.terminationStatus != 0 || trimmed?.isEmpty != false {
                 let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 Log.write("DEEP failed: status=\(process.terminationStatus) stderr=\(err.suffix(300))")
@@ -191,6 +319,64 @@ enum ClaudePolish {
             }
             Log.write("DEEP done: \(trimmed?.count ?? 0) chars")
             completion(trimmed)
+        }
+    }
+
+    /// Reads stream-json lines, reporting tool calls and assistant notes as
+    /// they happen; returns the final result text from the "result" event.
+    private static func streamEvents(from handle: FileHandle, onProgress: (String) -> Void) -> String? {
+        var buffer = Data()
+        var final: String?
+        while true {
+            let chunk = handle.availableData
+            if chunk.isEmpty { break }
+            buffer.append(chunk)
+            while let nl = buffer.firstIndex(of: 0x0A) {
+                let lineData = buffer.subdata(in: buffer.startIndex..<nl)
+                buffer.removeSubrange(buffer.startIndex...nl)
+                guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
+                if json["type"] as? String == "result" {
+                    if (json["is_error"] as? Bool) != true {
+                        final = json["result"] as? String
+                    }
+                } else if let line = progressLine(fromEvent: json) {
+                    onProgress(line)
+                }
+            }
+        }
+        return final
+    }
+
+    private static func progressLine(fromEvent json: [String: Any]) -> String? {
+        switch json["type"] as? String {
+        case "system":
+            return (json["subtype"] as? String) == "init" ? "Agent started" : nil
+        case "assistant":
+            guard let msg = json["message"] as? [String: Any],
+                  let content = msg["content"] as? [[String: Any]] else { return nil }
+            for block in content {
+                if block["type"] as? String == "tool_use", let name = block["name"] as? String {
+                    var detail = ""
+                    if let input = block["input"] as? [String: Any] {
+                        detail = (input["description"] as? String)
+                            ?? (input["query"] as? String)
+                            ?? (input["command"] as? String)
+                            ?? (input["file_path"] as? String)
+                            ?? (input["url"] as? String)
+                            ?? (input["prompt"] as? String)
+                            ?? ""
+                    }
+                    let short = name.replacingOccurrences(of: #"^mcp__[^_]+(_[^_]+)*__"#, with: "", options: .regularExpression)
+                    return detail.isEmpty ? short : "\(short): \(detail.prefix(70))"
+                }
+                if block["type"] as? String == "text", let t = block["text"] as? String {
+                    let s = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !s.isEmpty { return String(s.prefix(90)) }
+                }
+            }
+            return nil
+        default:
+            return nil
         }
     }
 
@@ -228,6 +414,24 @@ enum ClaudePolish {
         case .claudeCode: return (.claudeCode, nil)
         case .claudeCodeFable: return (.claudeCode, "claude-fable-5")
         case .codexSol: return (.codexCLI, "gpt-5.6-sol")
+        }
+    }
+
+    /// Human-readable identity of the provider and model that will actually
+    /// receive a normal AI request. Keep this derived from `resolution(for:)`
+    /// so the HUD cannot disagree with the runtime router.
+    static func resolvedEngineLabel(for engine: EngineChoice, fast: Bool = false) -> String {
+        let res = resolution(for: engine)
+        switch res.provider {
+        case .claudeAPI:
+            let model = res.model ?? (fast ? "claude-haiku-4-5" : Settings.shared.polishModel)
+            return "Claude API — \(model)"
+        case .claudeCode:
+            let model = res.model ?? Settings.shared.claudeCodeModel
+            return model.isEmpty ? "Claude Code — plan default" : "Claude Code — \(model)"
+        case .codexCLI:
+            let model = res.model ?? Settings.shared.codexModel
+            return model.isEmpty ? "ChatGPT — plan default" : "ChatGPT — \(model.uppercased())"
         }
     }
 

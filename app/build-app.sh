@@ -10,6 +10,7 @@ APP=build/SuperShout.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/apple/Products/Release/SuperShout "$APP/Contents/MacOS/SuperShout"
+cp Resources/* "$APP/Contents/Resources/" 2>/dev/null || true
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -20,8 +21,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.gca.supershout</string>
     <key>CFBundleName</key><string>Super Shout</string>
     <key>CFBundleDisplayName</key><string>Super Shout</string>
-    <key>CFBundleShortVersionString</key><string>1.4</string>
-    <key>CFBundleVersion</key><string>4</string>
+    <key>CFBundleShortVersionString</key><string>1.5</string>
+    <key>CFBundleVersion</key><string>5</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
