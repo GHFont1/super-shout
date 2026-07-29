@@ -3,6 +3,18 @@
     <channel>
         <title>SuperShout</title>
         <item>
+            <title>2.0.2</title>
+            <pubDate>Tue, 28 Jul 2026 20:42:38 -0400</pubDate>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>2.0.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# Super Shout 2.0.2
+
+- Adds a proper high-resolution Super Shout app icon in Finder, the Dock, and downloaded builds.
+]]></description>
+            <enclosure url="https://ghfont1.github.io/super-shout/releases/SuperShout-2.0.2.zip" length="6418875" type="application/octet-stream" sparkle:edSignature="MRXf3HYPAHKksndy7WkZFUlmdkge8FfszZLnS8N79BAbNUPaZXjMZIFIaPXnIvxAyaOE+AnUANFfTYkWHlFqBg=="/>
+        </item>
+        <item>
             <title>2.0.1</title>
             <pubDate>Tue, 28 Jul 2026 19:51:18 -0400</pubDate>
             <sparkle:version>8</sparkle:version>

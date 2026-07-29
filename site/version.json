@@ -1,5 +1,5 @@
 {
-  "version": "2.0.1",
-  "notes": "More reliable phone and meeting transcription, guided permissions, history retention and backup controls, and privacy-safe diagnostics.",
+  "version": "2.0.2",
+  "notes": "Adds a proper high-resolution Super Shout app icon in Finder, the Dock, and downloaded builds.",
   "url": "https://ghfont1.github.io/super-shout/SuperShout.zip"
 }
