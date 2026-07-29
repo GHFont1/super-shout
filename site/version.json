@@ -1,5 +1,5 @@
 {
-  "version": "2.0.2",
-  "notes": "Adds a proper high-resolution Super Shout app icon in Finder, the Dock, and downloaded builds.",
+  "version": "2.1.0",
+  "notes": "Turns AI Do and AI Ask into movable native mini-windows with close, minimize, maximize, persistent sizing, pasted follow-ups, and file or folder attachments.",
   "url": "https://ghfont1.github.io/super-shout/SuperShout.zip"
 }

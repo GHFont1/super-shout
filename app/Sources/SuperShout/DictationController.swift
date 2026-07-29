@@ -340,6 +340,7 @@ final class DictationController {
         Log.write("AGENT instruction: \"\(instruction.prefix(120))\" selection=\(selection?.count ?? 0) chars")
         state = .idle
         let engineLabel = ClaudePolish.resolvedEngineLabel(for: activeEngine)
+        ActivityCenter.shared.agentEngine = activeEngine
         let task = ActivityCenter.shared.begin(kind: "AI Do · \(engineLabel)", title: instruction)
         ClaudePolish.agentAct(instruction: instruction, selection: selection, engine: activeEngine, onProgress: { line in
             ActivityCenter.shared.update(task, line)

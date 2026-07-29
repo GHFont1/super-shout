@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// The AI Ask chat surface: a pull-down panel covering the top-right quadrant
-/// of the screen. It slides down the moment the Ask key is pressed, shows the
-/// live dictation as you speak, and stays up — answers and typed/spoken
-/// follow-ups land in the same conversation until you close it.
+/// The AI Ask chat surface: a native floating mini-window that opens when the
+/// Ask key is pressed, shows live dictation, and keeps typed, spoken, pasted,
+/// and file-backed follow-ups in the same conversation until it is closed.
 final class AskSession: ObservableObject {
     struct Message: Identifiable {
         let id = UUID()
@@ -15,6 +15,8 @@ final class AskSession: ObservableObject {
     @Published var messages: [Message] = []
     @Published var pending = false
     @Published var draft = ""
+    @Published var attachments: [URL] = []
+    @Published var dropTargeted = false
     /// True while the mic is open for this panel; `livePartial` is the
     /// in-flight transcript shown as a typing bubble.
     @Published var listening = false
@@ -33,24 +35,50 @@ final class AskSession: ObservableObject {
 
     func followUp() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !pending else { return }
+        guard (!text.isEmpty || !attachments.isEmpty), !pending else { return }
+        let files = attachments
         draft = ""
-        messages.append(Message(fromUser: true, text: text))
-        send()
+        attachments = []
+        let question = text.isEmpty
+            ? "Please inspect the attached item\(files.count == 1 ? "" : "s")."
+            : text
+        messages.append(Message(fromUser: true, text: question))
+        send(attachments: files)
     }
 
     func clear() {
         messages = []
         pending = false
         draft = ""
+        attachments = []
     }
 
-    private func send() {
+    func addAttachments(_ urls: [URL]) {
+        var known = Set(attachments.map(\.standardizedFileURL))
+        attachments.append(contentsOf: urls.map(\.standardizedFileURL).filter {
+            $0.isFileURL && known.insert($0).inserted
+        })
+    }
+
+    func removeAttachment(_ url: URL) {
+        attachments.removeAll { $0.standardizedFileURL == url.standardizedFileURL }
+    }
+
+    func chooseFiles() {
+        let picker = NSOpenPanel()
+        picker.allowsMultipleSelection = true
+        picker.canChooseFiles = true
+        picker.canChooseDirectories = true
+        picker.prompt = "Attach"
+        if picker.runModal() == .OK { addAttachments(picker.urls) }
+    }
+
+    private func send(attachments: [URL] = []) {
         pending = true
         let transcript = messages
             .map { "\($0.fromUser ? "User" : "Assistant"): \($0.text)" }
             .joined(separator: "\n\n")
-        ClaudePolish.ask(transcript, engine: engine) { [weak self] answer in
+        ClaudePolish.ask(transcript, engine: engine, attachments: attachments) { [weak self] answer in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.pending = false
@@ -76,7 +104,7 @@ final class AskPanel: NSPanel {
     }
 }
 
-final class AskWindowController {
+final class AskWindowController: NSObject, NSWindowDelegate {
     static let shared = AskWindowController()
     private var panel: AskPanel?
     private let session = AskSession()
@@ -115,34 +143,28 @@ final class AskWindowController {
 
     // MARK: Panel management
 
-    private func targetFrame(on screen: NSScreen) -> NSRect {
+    private func defaultFrame(on screen: NSScreen) -> NSRect {
         let vf = screen.visibleFrame
-        let w = max(480, vf.width / 2)
-        let h = max(420, vf.height / 2)
-        return NSRect(x: vf.maxX - w, y: vf.maxY - h, width: w, height: h)
+        let w: CGFloat = min(680, max(520, vf.width * 0.38))
+        let h: CGFloat = min(620, max(460, vf.height * 0.58))
+        return NSRect(x: vf.maxX - w - 18, y: vf.maxY - h - 18, width: w, height: h)
     }
 
     private func show() {
         if panel == nil { build() }
-        guard let panel, let screen = NSScreen.main else { return }
-        let final = targetFrame(on: screen)
+        guard let panel else { return }
         if visible {
-            panel.setFrame(final, display: true)
             panel.orderFrontRegardless()
             return
         }
         visible = true
         SoundCue.askOpen.play()
-        // Start tucked above the screen edge and slide down.
-        var start = final
-        start.origin.y = screen.frame.maxY
-        panel.setFrame(start, display: false)
         panel.alphaValue = 0.0
+        if panel.isMiniaturized { panel.deminiaturize(nil) }
         panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.28
+            ctx.duration = 0.16
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().setFrame(final, display: true)
             panel.animator().alphaValue = 1.0
         }
     }
@@ -150,12 +172,9 @@ final class AskWindowController {
     func hide() {
         guard let panel, visible else { return }
         visible = false
-        var up = panel.frame
-        up.origin.y = (panel.screen ?? NSScreen.main)?.frame.maxY ?? up.maxY
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.22
+            ctx.duration = 0.16
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            panel.animator().setFrame(up, display: true)
             panel.animator().alphaValue = 0.0
         }, completionHandler: {
             panel.orderOut(nil)
@@ -164,12 +183,15 @@ final class AskWindowController {
     }
 
     private func build() {
+        let frame = NSScreen.main.map(defaultFrame(on:)) ?? NSRect(x: 240, y: 200, width: 620, height: 540)
         let p = AskPanel(
-            contentRect: .zero,
-            styleMask: [.nonactivatingPanel, .borderless, .resizable],
+            contentRect: frame,
+            styleMask: [.nonactivatingPanel, .titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
+        p.title = "Super Shout Ask"
+        p.titleVisibility = .visible
         p.isReleasedWhenClosed = false
         p.level = .floating
         p.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
@@ -179,8 +201,16 @@ final class AskWindowController {
         p.isMovableByWindowBackground = true
         p.becomesKeyOnlyIfNeeded = true
         p.hidesOnDeactivate = false
+        p.minSize = NSSize(width: 420, height: 340)
+        p.delegate = self
+        p.setFrameAutosaveName("SuperShoutAskWindow")
         p.contentViewController = NSHostingController(rootView: AskView(session: session))
         panel = p
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hide()
+        return false
     }
 }
 
@@ -305,17 +335,17 @@ struct AskView: View {
             inputBar
         }
         .background(.regularMaterial)
-        .clipShape(UnevenRoundedRectangle(
-            topLeadingRadius: 0, bottomLeadingRadius: 16,
-            bottomTrailingRadius: 16, topTrailingRadius: 0
-        ))
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0, bottomLeadingRadius: 16,
-                bottomTrailingRadius: 16, topTrailingRadius: 0
-            )
-            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-        )
+        .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier],
+                isTargeted: $session.dropTargeted,
+                perform: acceptDrop)
+        .overlay {
+            if session.dropTargeted {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.mint, style: StrokeStyle(lineWidth: 2, dash: [7]))
+                    .padding(5)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private var header: some View {
@@ -339,15 +369,6 @@ struct AskView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .disabled(session.messages.isEmpty)
-            Button {
-                AskWindowController.shared.hide()
-            } label: {
-                Image(systemName: "chevron.up")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Hide (Esc)")
-            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -439,24 +460,76 @@ struct AskView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
-            TextField("Type a follow-up, or hold your Ask key to speak…", text: $session.draft)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { session.followUp() }
-            Button("Ask") { session.followUp() }
-                .disabled(session.pending || session.draft.trimmingCharacters(in: .whitespaces).isEmpty)
-            Button {
-                if let answer = session.lastAnswer {
-                    let pb = NSPasteboard.general
-                    pb.clearContents()
-                    pb.setString(answer, forType: .string)
+        VStack(alignment: .leading, spacing: 8) {
+            if !session.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(session.attachments, id: \.self) { url in
+                            HStack(spacing: 5) {
+                                Image(systemName: url.hasDirectoryPath ? "folder" : "doc")
+                                Text(url.lastPathComponent).lineLimit(1)
+                                Button { session.removeAttachment(url) } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color.primary.opacity(0.07), in: Capsule())
+                        }
+                    }
                 }
-            } label: {
-                Image(systemName: "doc.on.doc")
             }
-            .help("Copy last answer")
-            .disabled(session.lastAnswer == nil)
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("Paste or type a follow-up…", text: $session.draft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                    .onSubmit { session.followUp() }
+                Button { session.chooseFiles() } label: { Image(systemName: "paperclip") }
+                    .help("Attach files or folders")
+                Button("Ask") { session.followUp() }
+                    .disabled(session.pending || (session.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && session.attachments.isEmpty))
+                Button {
+                    if let answer = session.lastAnswer {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(answer, forType: .string)
+                    }
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .help("Copy last answer")
+                .disabled(session.lastAnswer == nil)
+            }
+            Text("Drop files or folders anywhere in the window to ask about them.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding(10)
+    }
+
+    private func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
+        var accepted = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                accepted = true
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                    guard let data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async { session.addAttachments([url]) }
+                }
+            } else if provider.canLoadObject(ofClass: NSString.self) {
+                accepted = true
+                provider.loadObject(ofClass: NSString.self) { value, _ in
+                    guard let text = value as? String else { return }
+                    DispatchQueue.main.async {
+                        if !session.draft.isEmpty { session.draft += "\n" }
+                        session.draft += text
+                    }
+                }
+            }
+        }
+        return accepted
     }
 }

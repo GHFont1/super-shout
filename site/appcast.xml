@@ -3,6 +3,22 @@
     <channel>
         <title>SuperShout</title>
         <item>
+            <title>2.1.0</title>
+            <pubDate>Wed, 29 Jul 2026 07:27:18 -0400</pubDate>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# Super Shout 2.1.0
+
+- Turns AI Do and AI Ask into movable, resizable native Mac mini-windows.
+- Adds real close, minimize, and maximize controls, plus remembered window size and position.
+- Adds typed and pasted follow-up prompts to AI Do.
+- Adds drag-and-drop and paperclip attachments for files and folders in both AI Do and AI Ask.
+- Keeps completed AI Do results visible without reopening a window you intentionally closed.
+]]></description>
+            <enclosure url="https://ghfont1.github.io/super-shout/releases/SuperShout-2.1.0.zip" length="6485689" type="application/octet-stream" sparkle:edSignature="wOj2Moweqt9V8sWalJkXZUObRX9l6bOXpszuJEPUK9QjFlPDMZfrOg5T5IzmZZu3Vx4bZx2ldYzImaFRBJbPDg=="/>
+        </item>
+        <item>
             <title>2.0.2</title>
             <pubDate>Tue, 28 Jul 2026 20:42:38 -0400</pubDate>
             <sparkle:version>9</sparkle:version>
